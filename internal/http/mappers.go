@@ -1,7 +1,7 @@
 package http
 
 import (
-	"git.emercury.dev/emercury/senderscore/api/internal/usecase"
+	"github.com/football.manager.api/internal/usecase"
 )
 
 func toCreateGroupDTO(req CreateGroupRequest) usecase.CreateGroupDTO {

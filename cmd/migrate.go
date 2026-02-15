@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"git.emercury.dev/emercury/senderscore/api/internal/data"
-	"git.emercury.dev/emercury/senderscore/api/internal/infrastructure"
-	"git.emercury.dev/emercury/senderscore/api/pkg/config"
+	"github.com/football.manager.api/internal/data"
+	"github.com/football.manager.api/internal/infrastructure"
+	"github.com/football.manager.api/pkg/config"
 	"github.com/go-gormigrate/gormigrate/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

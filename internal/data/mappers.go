@@ -1,7 +1,7 @@
 package data
 
 import (
-	"git.emercury.dev/emercury/senderscore/api/internal/domain"
+	"github.com/football.manager.api/internal/domain"
 )
 
 func toGroupDomain(model *GroupModel) *domain.Group {

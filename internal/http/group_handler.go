@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"git.emercury.dev/emercury/senderscore/api/internal/domain"
-	"git.emercury.dev/emercury/senderscore/api/internal/usecase"
+	"github.com/football.manager.api/internal/domain"
+	"github.com/football.manager.api/internal/usecase"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )

@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"time"
 
-	"git.emercury.dev/emercury/senderscore/api/internal/data"
-	"git.emercury.dev/emercury/senderscore/api/internal/infrastructure"
-	"git.emercury.dev/emercury/senderscore/api/internal/infrastructure/senderscore"
-	"git.emercury.dev/emercury/senderscore/api/internal/usecase"
-	"git.emercury.dev/emercury/senderscore/api/pkg/config"
+	"github.com/football.manager.api/internal/data"
+	"github.com/football.manager.api/internal/infrastructure"
+	"github.com/football.manager.api/internal/infrastructure/senderscore"
+	"github.com/football.manager.api/internal/usecase"
+	"github.com/football.manager.api/pkg/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

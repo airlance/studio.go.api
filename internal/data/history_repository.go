@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"git.emercury.dev/emercury/senderscore/api/internal/domain"
+	"github.com/football.manager.api/internal/domain"
 	"gorm.io/gorm"
 )
 
