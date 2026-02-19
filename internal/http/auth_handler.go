@@ -115,6 +115,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+func (h *AuthHandler) Logout(c *gin.Context) {
+	clearCookie(c, "fm-auth-token")
+	clearCookie(c, "token")
+	clearCookie(c, "access_token")
+	clearCookie(c, "refresh_token")
+
+	c.JSON(http.StatusOK, AuthSuccessResponse{Message: "Logout successful"})
+}
+
 func (h *AuthHandler) RequestResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -164,4 +173,8 @@ func (h *AuthHandler) CheckAuth(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func clearCookie(c *gin.Context, name string) {
+	c.SetCookie(name, "", -1, "/", "", false, true)
 }

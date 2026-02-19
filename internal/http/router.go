@@ -25,6 +25,7 @@ func RegisterRoutes(
 			auth.POST("/registration", authHandler.Register)
 			auth.POST("/verify-email", authHandler.VerifyEmail)
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/reset-password/request", authHandler.RequestResetPassword)
 			auth.POST("/reset-password/confirm", authHandler.ConfirmResetPassword)
 			auth.GET("/check", userAuthMiddleware, authHandler.CheckAuth)
