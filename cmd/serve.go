@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/football.manager.api/internal/data"
@@ -41,32 +42,33 @@ func serve(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	// Data
-	groupRepo := data.NewGroupRepository(db)
-	ipRepo := data.NewIPRepository(db)
-	historyRepo := data.NewHistoryRepository(db)
-	scoreStatRepo := data.NewScoreStatRepository(db)
+	userRepo := data.NewUserRepository(db)
 
-	// Use Cases
-	groupUC := usecase.NewGroupUseCase(groupRepo, ipRepo, historyRepo, scoreStatRepo)
-	ipUC := usecase.NewIPUseCase(groupRepo, ipRepo, historyRepo)
-
-	// Handlers
-	groupHandler := handler.NewGroupHandler(groupUC, ipUC)
-
-	// Middleware
-	validTokens := cfg.Auth.GetTokens()
-	authMiddleware := infrastructure.AuthMiddleware(validTokens)
-
-	if len(validTokens) == 0 {
-		logrus.Warn("No API tokens configured. All protected endpoints will be inaccessible.")
-	} else {
-		logrus.Infof("API authentication enabled with %d token(s)", len(validTokens))
+	emailSender := infrastructure.NewLogEmailSender()
+	if strings.EqualFold(cfg.Mailer.Provider, "smtp") {
+		emailSender = infrastructure.NewSMTPEmailSender(
+			cfg.Mailer.Host,
+			cfg.Mailer.Port,
+			cfg.Mailer.Username,
+			cfg.Mailer.Password,
+			cfg.Mailer.From,
+			cfg.Mailer.LogoPath,
+		)
 	}
+
+	userTokenManager := infrastructure.NewUserTokenManager(cfg.Auth.JWTSecret, time.Duration(cfg.Auth.JWTTTLMinutes)*time.Minute)
+	authUC := usecase.NewAuthUseCase(userRepo, userTokenManager, emailSender, cfg.Mailer.GetAdminEmails())
+	userUC := usecase.NewUserUseCase(userRepo)
+
+	authHandler := handler.NewAuthHandler(authUC)
+	userHandler := handler.NewUserHandler(userUC)
+
+	userAuthMiddleware := infrastructure.UserAuthMiddleware(userTokenManager)
 
 	// Router
 	router := gin.Default()
-	handler.RegisterRoutes(router, groupHandler, authMiddleware)
+	router.Use(handler.CORSMiddleware(cfg.Server.GetCORSAllowedOrigins()))
+	handler.RegisterRoutes(router, authHandler, userHandler, userAuthMiddleware)
 
 	// Server
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)
