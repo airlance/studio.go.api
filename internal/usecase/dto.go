@@ -1,13 +1,8 @@
 package usecase
 
-import (
-	"time"
-
-	"github.com/football.manager.api/internal/domain"
-)
+import "github.com/football.manager.api/internal/domain"
 
 type RegisterDTO struct {
-	FullName string
 	Email    string
 	Password string
 }
@@ -39,7 +34,6 @@ type ResetPasswordDTO struct {
 type UserDTO struct {
 	ID              uint   `json:"id"`
 	UUID            string `json:"uuid"`
-	FullName        string `json:"full_name"`
 	Email           string `json:"email"`
 	EmailVerified   bool   `json:"email_verified"`
 	EmailVerifiedAt *int64 `json:"email_verified_at,omitempty"`
@@ -47,20 +41,29 @@ type UserDTO struct {
 	UpdatedAt       int64  `json:"updated_at"`
 }
 
+type CountryDTO struct {
+	ID   uint   `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 type CreateManagerDTO struct {
-	FirstName string
-	LastName  string
-	Birthday  string
+	Name      string
+	Status    string
+	CountryID *uint
+	Avatar    string
 }
 
 type ManagerDTO struct {
-	ID        uint   `json:"id"`
-	UserID    uint   `json:"user_id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Birthday  string `json:"birthday"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID        uint        `json:"id"`
+	UserID    uint        `json:"user_id"`
+	Name      string      `json:"name"`
+	Status    string      `json:"status"`
+	CountryID *uint       `json:"country_id,omitempty"`
+	Avatar    string      `json:"avatar,omitempty"`
+	Country   *CountryDTO `json:"country,omitempty"`
+	CreatedAt int64       `json:"created_at"`
+	UpdatedAt int64       `json:"updated_at"`
 }
 
 type CreateCareerDTO struct {
@@ -83,9 +86,11 @@ func mapManagerToDTO(manager *domain.Manager) *ManagerDTO {
 	return &ManagerDTO{
 		ID:        manager.ID,
 		UserID:    manager.UserID,
-		FirstName: manager.FirstName,
-		LastName:  manager.LastName,
-		Birthday:  manager.Birthday.Format(time.DateOnly),
+		Name:      manager.Name,
+		Status:    manager.Status,
+		CountryID: manager.CountryID,
+		Avatar:    manager.Avatar,
+		Country:   mapCountryToDTO(manager.Country),
 		CreatedAt: manager.CreatedAt.Unix(),
 		UpdatedAt: manager.UpdatedAt.Unix(),
 	}
@@ -102,5 +107,17 @@ func mapCareerToDTO(career *domain.Career) *CareerDTO {
 		Name:      career.Name,
 		CreatedAt: career.CreatedAt.Unix(),
 		UpdatedAt: career.UpdatedAt.Unix(),
+	}
+}
+
+func mapCountryToDTO(country *domain.Country) *CountryDTO {
+	if country == nil {
+		return nil
+	}
+
+	return &CountryDTO{
+		ID:   country.ID,
+		Code: country.Code,
+		Name: country.Name,
 	}
 }

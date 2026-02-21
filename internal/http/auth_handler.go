@@ -34,14 +34,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			httpx.RespondError(c, http.StatusConflict, "user_exists", "User with this email already exists")
 			return
 		}
-		if err == domain.ErrUsernameTaken {
-			httpx.RespondError(c, http.StatusConflict, "username_exists", "User with this username already exists")
-			return
-		}
-		if err == domain.ErrInvalidUsername {
-			httpx.RespondError(c, http.StatusBadRequest, "invalid_username", "Username must be 3-32 chars and contain only a-z, 0-9, dot, dash or underscore")
-			return
-		}
 		logrus.WithError(err).Error("Failed to register user")
 		httpx.RespondError(c, http.StatusInternalServerError, "internal_error", "Failed to register user")
 		return

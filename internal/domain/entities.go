@@ -5,7 +5,6 @@ import "time"
 type User struct {
 	ID                     uint
 	UUID                   string
-	FullName               string
 	Email                  string
 	PasswordHash           string
 	Role                   string
@@ -21,12 +20,22 @@ type User struct {
 	UpdatedAt              time.Time
 }
 
+type Country struct {
+	ID        uint
+	Code      string
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Manager struct {
 	ID        uint
 	UserID    uint
-	FirstName string
-	LastName  string
-	Birthday  time.Time
+	Name      string
+	Status    string
+	CountryID *uint
+	Avatar    string
+	Country   *Country
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

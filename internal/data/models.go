@@ -5,7 +5,6 @@ import "time"
 type UserModel struct {
 	ID                     uint       `gorm:"primaryKey;comment:ID"`
 	UUID                   string     `gorm:"type:char(36);uniqueIndex;not null;column:uuid;comment:UUID"`
-	FullName               string     `gorm:"type:varchar(255);not null;default:'';comment:Full Name"`
 	Email                  string     `gorm:"type:varchar(255);uniqueIndex;not null;comment:Email"`
 	PasswordHash           string     `gorm:"type:varchar(255);not null;comment:Password Hash"`
 	Role                   string     `gorm:"type:varchar(20);not null;default:'user';comment:Role"`
@@ -25,6 +24,18 @@ func (UserModel) TableName() string {
 	return "users"
 }
 
+type CountryModel struct {
+	ID        uint      `gorm:"primaryKey;comment:ID"`
+	Code      string    `gorm:"type:varchar(8);uniqueIndex;not null;comment:Country Code"`
+	Name      string    `gorm:"type:varchar(120);not null;comment:Country Name"`
+	CreatedAt time.Time `gorm:"autoCreateTime;comment:Created At"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime;comment:Updated At"`
+}
+
+func (CountryModel) TableName() string {
+	return "countries"
+}
+
 type UserLastLoginModel struct {
 	UserID             uint       `gorm:"primaryKey;comment:User ID"`
 	LastLoginAt        *time.Time `gorm:"comment:Last Login At"`
@@ -39,13 +50,15 @@ func (UserLastLoginModel) TableName() string {
 }
 
 type ManagerModel struct {
-	ID        uint      `gorm:"primaryKey;comment:ID"`
-	UserID    uint      `gorm:"uniqueIndex;not null;comment:User ID"`
-	FirstName string    `gorm:"type:varchar(100);not null;comment:First Name"`
-	LastName  string    `gorm:"type:varchar(100);not null;comment:Last Name"`
-	Birthday  time.Time `gorm:"type:date;not null;comment:Birthday"`
-	CreatedAt time.Time `gorm:"autoCreateTime;comment:Created At"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime;comment:Updated At"`
+	ID        uint          `gorm:"primaryKey;comment:ID"`
+	UserID    uint          `gorm:"uniqueIndex;not null;comment:User ID"`
+	Name      string        `gorm:"type:varchar(255);not null;comment:Name"`
+	Status    string        `gorm:"type:varchar(20);not null;default:'active';check:status IN ('active','inactive','banned','blocked');comment:Status"`
+	CountryID *uint         `gorm:"index;comment:Country ID"`
+	Avatar    string        `gorm:"type:varchar(512);not null;default:'';comment:Avatar URL"`
+	Country   *CountryModel `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;foreignKey:CountryID;references:ID"`
+	CreatedAt time.Time     `gorm:"autoCreateTime;comment:Created At"`
+	UpdatedAt time.Time     `gorm:"autoUpdateTime;comment:Updated At"`
 }
 
 func (ManagerModel) TableName() string {

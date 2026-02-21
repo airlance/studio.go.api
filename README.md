@@ -44,6 +44,18 @@ MAILER_USERNAME=
 MAILER_PASSWORD=
 MAILER_LOGO_PATH=logo.png
 MAILER_ADMIN_EMAILS=admin@manager.localhost
+
+# MinIO / S3 storage for manager avatars
+STORAGE_PROVIDER=minio
+STORAGE_ENDPOINT=http://localhost:9000
+STORAGE_REGION=us-east-1
+STORAGE_ACCESS_KEY_ID=minioadmin
+STORAGE_SECRET_ACCESS_KEY=minioadmin
+STORAGE_BUCKET=fm-api
+STORAGE_PUBLIC_BASE_URL=http://localhost:9000/fm-api
+STORAGE_USE_SSL=false
+STORAGE_FORCE_PATH_STYLE=true
+STORAGE_MAX_AVATAR_MB=5
 ```
 
 ## Quick Start
@@ -103,6 +115,7 @@ After registration verification code is sent through configured sender:
 - `MAILER_PROVIDER=smtp`: email is sent via SMTP (for local dev use MailHog on `localhost:1025`)
 - `MAILER_LOGO_PATH`: path to logo file embedded in email template (default: `logo.png`)
 - `MAILER_ADMIN_EMAILS`: comma-separated list of admin emails for new registration notifications
+- `STORAGE_*`: avatar uploads (endpoint, credentials, bucket, public URL base)
 - Email templates are stored in `/Users/resoul/Projects/manager/projects/api/internal/usecase/templates/email/{en,ru}`
 - Localization is selected from `Accept-Language` (`ru` -> Russian, otherwise English)
 

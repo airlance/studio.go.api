@@ -51,9 +51,8 @@ func NewAuthUseCase(
 
 func (uc *authUseCase) Register(ctx context.Context, dto RegisterDTO, ip, userAgent, locale string) (*UserDTO, error) {
 	email := strings.TrimSpace(strings.ToLower(dto.Email))
-	fullName := strings.TrimSpace(dto.FullName)
-	if email == "" || dto.Password == "" || fullName == "" {
-		return nil, fmt.Errorf("full name, email and password are required")
+	if email == "" || dto.Password == "" {
+		return nil, fmt.Errorf("email and password are required")
 	}
 
 	existing, err := uc.userRepo.GetByEmail(ctx, email)
@@ -77,7 +76,6 @@ func (uc *authUseCase) Register(ctx context.Context, dto RegisterDTO, ip, userAg
 
 	user := &domain.User{
 		UUID:                  uuid.New().String(),
-		FullName:              fullName,
 		Email:                 email,
 		PasswordHash:          string(passwordHash),
 		RegistrationIP:        sanitizeIP(ip),
@@ -90,7 +88,8 @@ func (uc *authUseCase) Register(ctx context.Context, dto RegisterDTO, ip, userAg
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	verifyEmail, err := registrationCodeEmail(locale, user.FullName, code, expiresAt)
+	displayName := fallbackDisplayNameFromEmail(user.Email)
+	verifyEmail, err := registrationCodeEmail(locale, displayName, code, expiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render registration email: %w", err)
 	}
@@ -126,7 +125,7 @@ func (uc *authUseCase) VerifyEmail(ctx context.Context, dto VerifyEmailDTO, loca
 		return nil, "", false, err
 	}
 
-	successEmail, err := emailVerifiedSuccessEmail(locale, user.FullName)
+	successEmail, err := emailVerifiedSuccessEmail(locale, fallbackDisplayNameFromEmail(user.Email))
 	if err != nil {
 		return nil, "", false, fmt.Errorf("failed to render verified email: %w", err)
 	}
@@ -177,7 +176,7 @@ func (uc *authUseCase) ResendVerificationCode(ctx context.Context, dto ResendVer
 		return err
 	}
 
-	verifyEmail, err := registrationCodeEmail(locale, user.FullName, code, expiresAt)
+	verifyEmail, err := registrationCodeEmail(locale, fallbackDisplayNameFromEmail(user.Email), code, expiresAt)
 	if err != nil {
 		return fmt.Errorf("failed to render registration email: %w", err)
 	}
@@ -261,7 +260,7 @@ func (uc *authUseCase) RequestPasswordReset(ctx context.Context, dto ResetPasswo
 		return err
 	}
 
-	resetEmail, err := resetPasswordCodeEmail(locale, user.FullName, code, expiresAt)
+	resetEmail, err := resetPasswordCodeEmail(locale, fallbackDisplayNameFromEmail(user.Email), code, expiresAt)
 	if err != nil {
 		return fmt.Errorf("failed to render reset email: %w", err)
 	}
@@ -295,7 +294,7 @@ func (uc *authUseCase) ResetPassword(ctx context.Context, dto ResetPasswordDTO, 
 		return err
 	}
 
-	successEmail, err := passwordChangedSuccessEmail(locale, user.FullName)
+	successEmail, err := passwordChangedSuccessEmail(locale, fallbackDisplayNameFromEmail(user.Email))
 	if err != nil {
 		return fmt.Errorf("failed to render password changed email: %w", err)
 	}
@@ -330,7 +329,6 @@ func mapUserToDTO(user *domain.User) *UserDTO {
 	return &UserDTO{
 		ID:              user.ID,
 		UUID:            user.UUID,
-		FullName:        user.FullName,
 		Email:           user.Email,
 		EmailVerified:   user.EmailVerifiedAt != nil,
 		EmailVerifiedAt: verifiedAt,
@@ -360,7 +358,7 @@ func (uc *authUseCase) notifyAdminsAboutRegistration(ctx context.Context, user *
 		return nil
 	}
 
-	adminEmail, err := adminNewRegistrationEmail(locale, user.FullName, user.Email, sanitizeIP(ip), sanitizeUserAgent(userAgent), time.Now().UTC())
+	adminEmail, err := adminNewRegistrationEmail(locale, fallbackDisplayNameFromEmail(user.Email), user.Email, sanitizeIP(ip), sanitizeUserAgent(userAgent), time.Now().UTC())
 	if err != nil {
 		return fmt.Errorf("failed to render admin email: %w", err)
 	}
@@ -371,4 +369,17 @@ func (uc *authUseCase) notifyAdminsAboutRegistration(ctx context.Context, user *
 	}
 
 	return nil
+}
+
+func fallbackDisplayNameFromEmail(email string) string {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return "Manager"
+	}
+	parts := strings.SplitN(email, "@", 2)
+	name := strings.TrimSpace(parts[0])
+	if name == "" {
+		return "Manager"
+	}
+	return name
 }
