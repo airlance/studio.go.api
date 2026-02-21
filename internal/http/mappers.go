@@ -6,7 +6,6 @@ import (
 
 func toRegisterDTO(req RegisterRequest) usecase.RegisterDTO {
 	return usecase.RegisterDTO{
-		FullName: req.FullName,
 		Email:    req.Email,
 		Password: req.Password,
 	}
@@ -48,9 +47,10 @@ func toResetPasswordDTO(req ConfirmResetPasswordRequest) usecase.ResetPasswordDT
 
 func toCreateManagerDTO(req CreateManagerRequest) usecase.CreateManagerDTO {
 	return usecase.CreateManagerDTO{
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Birthday:  req.Birthday,
+		Name:      req.Name,
+		Status:    req.Status,
+		CountryID: req.CountryID,
+		Avatar:    req.Avatar,
 	}
 }
 
@@ -67,12 +67,23 @@ func toUserResponse(dto *usecase.UserDTO) UserResponse {
 
 	return UserResponse{
 		ID:              dto.UUID,
-		FullName:        dto.FullName,
 		Email:           dto.Email,
 		EmailVerified:   dto.EmailVerified,
 		EmailVerifiedAt: dto.EmailVerifiedAt,
 		CreatedAt:       dto.CreatedAt,
 		UpdatedAt:       dto.UpdatedAt,
+	}
+}
+
+func toCountryResponse(dto *usecase.CountryDTO) *CountryResponse {
+	if dto == nil {
+		return nil
+	}
+
+	return &CountryResponse{
+		ID:   dto.ID,
+		Code: dto.Code,
+		Name: dto.Name,
 	}
 }
 
@@ -84,9 +95,11 @@ func toManagerResponse(dto *usecase.ManagerDTO) ManagerResponse {
 	return ManagerResponse{
 		ID:        dto.ID,
 		UserID:    dto.UserID,
-		FirstName: dto.FirstName,
-		LastName:  dto.LastName,
-		Birthday:  dto.Birthday,
+		Name:      dto.Name,
+		Status:    dto.Status,
+		CountryID: dto.CountryID,
+		Avatar:    dto.Avatar,
+		Country:   toCountryResponse(dto.Country),
 		CreatedAt: dto.CreatedAt,
 		UpdatedAt: dto.UpdatedAt,
 	}

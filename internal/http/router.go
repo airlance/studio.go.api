@@ -10,6 +10,7 @@ func RegisterRoutes(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	managerHandler *ManagerHandler,
+	countryHandler *CountryHandler,
 	careerHandler *CareerHandler,
 	userAuthMiddleware gin.HandlerFunc,
 	adminAuthMiddleware gin.HandlerFunc,
@@ -60,6 +61,11 @@ func RegisterRoutes(
 		{
 			managers.GET("/me", userAuthMiddleware, managerHandler.GetMe)
 			managers.POST("/me", userAuthMiddleware, managerHandler.CreateMe)
+		}
+
+		countries := v1.Group("/countries")
+		{
+			countries.GET("", countryHandler.List)
 		}
 
 		careers := v1.Group("/careers")

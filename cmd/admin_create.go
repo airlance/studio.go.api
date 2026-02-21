@@ -70,7 +70,6 @@ var adminCreateCmd = cobra.Command{
 		now := time.Now().UTC()
 		user := &domain.User{
 			UUID:            uuid.New().String(),
-			FullName:        "Admin",
 			Email:           email,
 			PasswordHash:    string(passwordHash),
 			Role:            platformauth.RoleAdmin,

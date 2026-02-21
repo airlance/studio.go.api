@@ -40,7 +40,7 @@ func (r *managerRepository) Create(ctx context.Context, manager *domain.Manager)
 
 func (r *managerRepository) GetByUserID(ctx context.Context, userID uint) (*domain.Manager, error) {
 	var model ManagerModel
-	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Country").Where("user_id = ?", userID).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, domain.ErrManagerNotFound
 		}
@@ -63,7 +63,7 @@ func (r *managerRepository) ListByUserIDs(ctx context.Context, userIDs []uint) (
 	}
 
 	var models []ManagerModel
-	if err := r.db.WithContext(ctx).Where("user_id IN ?", userIDs).Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Country").Where("user_id IN ?", userIDs).Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to list managers by user ids: %w", err)
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/football.manager.api/internal/domain"
 )
@@ -24,22 +23,25 @@ func NewManagerUseCase(managerRepo domain.ManagerRepository) ManagerUseCase {
 }
 
 func (uc *managerUseCase) Create(ctx context.Context, userID uint, dto CreateManagerDTO) (*ManagerDTO, error) {
-	firstName := strings.TrimSpace(dto.FirstName)
-	lastName := strings.TrimSpace(dto.LastName)
-	if firstName == "" || lastName == "" || strings.TrimSpace(dto.Birthday) == "" {
-		return nil, fmt.Errorf("first name, last name and birthday are required")
+	name := strings.TrimSpace(dto.Name)
+	if name == "" {
+		return nil, fmt.Errorf("name is required")
 	}
 
-	birthday, err := time.Parse(time.DateOnly, dto.Birthday)
-	if err != nil {
-		return nil, fmt.Errorf("birthday must be in YYYY-MM-DD format")
+	status := strings.TrimSpace(strings.ToLower(dto.Status))
+	if status == "" {
+		status = "active"
+	}
+	if status != "active" && status != "inactive" && status != "banned" && status != "blocked" {
+		return nil, fmt.Errorf("status must be one of: active, inactive, banned, blocked")
 	}
 
 	manager := &domain.Manager{
 		UserID:    userID,
-		FirstName: firstName,
-		LastName:  lastName,
-		Birthday:  birthday,
+		Name:      name,
+		Status:    status,
+		CountryID: dto.CountryID,
+		Avatar:    strings.TrimSpace(dto.Avatar),
 	}
 
 	if err := uc.managerRepo.Create(ctx, manager); err != nil {

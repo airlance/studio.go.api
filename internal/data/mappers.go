@@ -11,7 +11,6 @@ func toUserDomain(model *UserModel) *domain.User {
 	return &domain.User{
 		ID:                     model.ID,
 		UUID:                   model.UUID,
-		FullName:               model.FullName,
 		Email:                  model.Email,
 		PasswordHash:           model.PasswordHash,
 		Role:                   model.Role,
@@ -35,7 +34,6 @@ func toUserModel(entity *domain.User) *UserModel {
 	return &UserModel{
 		ID:                     entity.ID,
 		UUID:                   entity.UUID,
-		FullName:               entity.FullName,
 		Email:                  entity.Email,
 		PasswordHash:           entity.PasswordHash,
 		Role:                   entity.Role,
@@ -52,6 +50,32 @@ func toUserModel(entity *domain.User) *UserModel {
 	}
 }
 
+func toCountryDomain(model *CountryModel) *domain.Country {
+	if model == nil {
+		return nil
+	}
+	return &domain.Country{
+		ID:        model.ID,
+		Code:      model.Code,
+		Name:      model.Name,
+		CreatedAt: model.CreatedAt,
+		UpdatedAt: model.UpdatedAt,
+	}
+}
+
+func toCountryModel(entity *domain.Country) *CountryModel {
+	if entity == nil {
+		return nil
+	}
+	return &CountryModel{
+		ID:        entity.ID,
+		Code:      entity.Code,
+		Name:      entity.Name,
+		CreatedAt: entity.CreatedAt,
+		UpdatedAt: entity.UpdatedAt,
+	}
+}
+
 func toManagerDomain(model *ManagerModel) *domain.Manager {
 	if model == nil {
 		return nil
@@ -59,9 +83,11 @@ func toManagerDomain(model *ManagerModel) *domain.Manager {
 	return &domain.Manager{
 		ID:        model.ID,
 		UserID:    model.UserID,
-		FirstName: model.FirstName,
-		LastName:  model.LastName,
-		Birthday:  model.Birthday,
+		Name:      model.Name,
+		Status:    model.Status,
+		CountryID: model.CountryID,
+		Avatar:    model.Avatar,
+		Country:   toCountryDomain(model.Country),
 		CreatedAt: model.CreatedAt,
 		UpdatedAt: model.UpdatedAt,
 	}
@@ -74,9 +100,10 @@ func toManagerModel(entity *domain.Manager) *ManagerModel {
 	return &ManagerModel{
 		ID:        entity.ID,
 		UserID:    entity.UserID,
-		FirstName: entity.FirstName,
-		LastName:  entity.LastName,
-		Birthday:  entity.Birthday,
+		Name:      entity.Name,
+		Status:    entity.Status,
+		CountryID: entity.CountryID,
+		Avatar:    entity.Avatar,
 		CreatedAt: entity.CreatedAt,
 		UpdatedAt: entity.UpdatedAt,
 	}

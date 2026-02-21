@@ -25,3 +25,7 @@ type CareerRepository interface {
 	ListByManagerID(ctx context.Context, managerID uint) ([]*Career, error)
 	ListByManagerIDs(ctx context.Context, managerIDs []uint) ([]*Career, error)
 }
+
+type CountryRepository interface {
+	ListAll(ctx context.Context) ([]*Country, error)
+}

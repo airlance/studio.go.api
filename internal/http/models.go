@@ -1,8 +1,6 @@
 package http
 
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=32"`
-	FullName string `json:"full_name" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 }
@@ -37,8 +35,6 @@ type AuthSuccessResponse struct {
 
 type UserResponse struct {
 	ID              string `json:"id"`
-	Username        string `json:"username"`
-	FullName        string `json:"full_name"`
 	Email           string `json:"email"`
 	EmailVerified   bool   `json:"email_verified"`
 	EmailVerifiedAt *int64 `json:"email_verified_at,omitempty"`
@@ -46,20 +42,29 @@ type UserResponse struct {
 	UpdatedAt       int64  `json:"updated_at"`
 }
 
+type CountryResponse struct {
+	ID   uint   `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 type CreateManagerRequest struct {
-	FirstName string `json:"first_name" binding:"required"`
-	LastName  string `json:"last_name" binding:"required"`
-	Birthday  string `json:"birthday" binding:"required"`
+	Name      string `json:"name" binding:"required"`
+	Status    string `json:"status"`
+	CountryID *uint  `json:"country_id"`
+	Avatar    string `json:"avatar"`
 }
 
 type ManagerResponse struct {
-	ID        uint   `json:"id"`
-	UserID    uint   `json:"user_id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Birthday  string `json:"birthday"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID        uint             `json:"id"`
+	UserID    uint             `json:"user_id"`
+	Name      string           `json:"name"`
+	Status    string           `json:"status"`
+	CountryID *uint            `json:"country_id,omitempty"`
+	Avatar    string           `json:"avatar,omitempty"`
+	Country   *CountryResponse `json:"country,omitempty"`
+	CreatedAt int64            `json:"created_at"`
+	UpdatedAt int64            `json:"updated_at"`
 }
 
 type CreateCareerRequest struct {

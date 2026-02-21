@@ -17,6 +17,7 @@ type Config struct {
 	Auth    AuthConfig     `envconfig:"AUTH"`
 	Server  ServerConfig   `envconfig:"SERVER"`
 	Mailer  MailerConfig   `envconfig:"MAILER"`
+	Storage StorageConfig  `envconfig:"STORAGE"`
 }
 
 type DatabaseConfig struct {
@@ -48,6 +49,19 @@ type MailerConfig struct {
 	Password    string `envconfig:"PASSWORD" required:"false"`
 	LogoPath    string `envconfig:"LOGO_PATH" default:"logo.png"`
 	AdminEmails string `envconfig:"ADMIN_EMAILS" required:"false"`
+}
+
+type StorageConfig struct {
+	Provider      string `envconfig:"PROVIDER" default:"minio"`
+	Endpoint      string `envconfig:"ENDPOINT" default:"http://localhost:9000"`
+	Region        string `envconfig:"REGION" default:"us-east-1"`
+	AccessKeyID   string `envconfig:"ACCESS_KEY_ID" required:"false"`
+	SecretKey     string `envconfig:"SECRET_ACCESS_KEY" required:"false"`
+	Bucket        string `envconfig:"BUCKET" default:"fm-api"`
+	PublicBaseURL string `envconfig:"PUBLIC_BASE_URL" required:"false"`
+	UseSSL        bool   `envconfig:"USE_SSL" default:"false"`
+	ForcePath     bool   `envconfig:"FORCE_PATH_STYLE" default:"true"`
+	MaxAvatarMB   int64  `envconfig:"MAX_AVATAR_MB" default:"5"`
 }
 
 func (s *ServerConfig) GetCORSAllowedOrigins() []string {
