@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/football.manager.api/cmd"
+	"github.com/resoul/studio.go.api/cmd"
 	"github.com/sirupsen/logrus"
 )
 

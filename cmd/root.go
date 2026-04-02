@@ -8,13 +8,14 @@ import (
 
 var (
 	rootCmd = cobra.Command{
-		Use: "score",
+		Use: "studio",
 	}
 	mainWG *sync.WaitGroup
 )
 
 func RootCommand(wg *sync.WaitGroup) *cobra.Command {
 	mainWG = wg
-	rootCmd.AddCommand(&serveCmd, &migrateCmd, &adminCreateCmd, &seedCmd)
+	rootCmd.AddCommand(&serveCmd)
+	rootCmd.AddCommand(&adminCmd)
 	return &rootCmd
 }

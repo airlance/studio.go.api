@@ -29,20 +29,22 @@ type LoggingConfig struct {
 }
 
 type AuthConfig struct {
-	APITokens     string `envconfig:"API_TOKENS" required:"false"`
-	JWTSecret     string `envconfig:"JWT_SECRET" default:"dev-jwt-secret-change-me"`
-	JWTTTLMinutes int    `envconfig:"JWT_TTL_MINUTES" default:"60"`
-	AdminRoles    string `envconfig:"ADMIN_ROLES" default:"admin"`
+	APITokens      string `envconfig:"API_TOKENS" required:"false"`
+	JWTSecret      string `envconfig:"JWT_SECRET" default:"dev-jwt-secret-change-me"`
+	JWTTTLMinutes  int    `envconfig:"JWT_TTL_MINUTES" default:"60"`
+	AdminRoles     string `envconfig:"ADMIN_ROLES" default:"admin"`
+	HydraAdminURL  string `envconfig:"HYDRA_ADMIN_URL" default:"http://hydra:4445"`
+	KratosAdminURL string `envconfig:"KRATOS_ADMIN_URL" default:"http://kratos:4434"`
 }
 
 type ServerConfig struct {
 	Port               string `envconfig:"PORT" default:"8080"`
-	CORSAllowedOrigins string `envconfig:"CORS_ALLOWED_ORIGINS" default:"http://admin.fm.localhost,http://dashboard.fm.localhost,http://localhost:5173"`
+	CORSAllowedOrigins string `envconfig:"CORS_ALLOWED_ORIGINS" default:"http://dashboard.studio.localhost"`
 }
 
 type MailerConfig struct {
 	Provider    string `envconfig:"PROVIDER" default:"log"`
-	From        string `envconfig:"FROM" default:"no-reply@manager.localhost"`
+	From        string `envconfig:"FROM" default:"no-reply@studio.localhost"`
 	Host        string `envconfig:"HOST" default:"localhost"`
 	Port        int    `envconfig:"PORT" default:"1025"`
 	Username    string `envconfig:"USERNAME" required:"false"`
@@ -57,7 +59,7 @@ type StorageConfig struct {
 	Region        string `envconfig:"REGION" default:"us-east-1"`
 	AccessKeyID   string `envconfig:"ACCESS_KEY_ID" required:"false"`
 	SecretKey     string `envconfig:"SECRET_ACCESS_KEY" required:"false"`
-	Bucket        string `envconfig:"BUCKET" default:"fm-api"`
+	Bucket        string `envconfig:"BUCKET" default:"studio"`
 	PublicBaseURL string `envconfig:"PUBLIC_BASE_URL" required:"false"`
 	UseSSL        bool   `envconfig:"USE_SSL" default:"false"`
 	ForcePath     bool   `envconfig:"FORCE_PATH_STYLE" default:"true"`
@@ -72,60 +74,6 @@ func (s *ServerConfig) GetCORSAllowedOrigins() []string {
 		origin = strings.TrimSpace(origin)
 		if origin != "" {
 			result = append(result, origin)
-		}
-	}
-
-	return result
-}
-
-func (a *AuthConfig) GetTokens() []string {
-	if a.APITokens == "" {
-		return []string{}
-	}
-
-	tokens := strings.Split(a.APITokens, ",")
-	result := make([]string, 0, len(tokens))
-
-	for _, token := range tokens {
-		token = strings.TrimSpace(token)
-		if token != "" {
-			result = append(result, token)
-		}
-	}
-
-	return result
-}
-
-func (a *AuthConfig) GetAdminRoles() []string {
-	if a.AdminRoles == "" {
-		return []string{"admin"}
-	}
-
-	roles := strings.Split(a.AdminRoles, ",")
-	result := make([]string, 0, len(roles))
-	for _, role := range roles {
-		role = strings.TrimSpace(strings.ToLower(role))
-		if role != "" {
-			result = append(result, role)
-		}
-	}
-	if len(result) == 0 {
-		return []string{"admin"}
-	}
-	return result
-}
-
-func (m *MailerConfig) GetAdminEmails() []string {
-	if m.AdminEmails == "" {
-		return []string{}
-	}
-
-	emails := strings.Split(m.AdminEmails, ",")
-	result := make([]string, 0, len(emails))
-	for _, email := range emails {
-		email = strings.TrimSpace(strings.ToLower(email))
-		if email != "" {
-			result = append(result, email)
 		}
 	}
 

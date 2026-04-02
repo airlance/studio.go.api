@@ -2,14 +2,15 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/football.manager.api/internal/app"
-	handler "github.com/football.manager.api/internal/http"
-	"github.com/football.manager.api/internal/platform/httpx"
 	"github.com/gin-gonic/gin"
+	"github.com/resoul/studio.go.api/internal/app"
+	"github.com/resoul/studio.go.api/internal/httpx"
+	"github.com/resoul/studio.go.api/internal/ory"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -34,21 +35,20 @@ func serve(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	// Router
 	router := gin.Default()
 	router.Use(httpx.CORSMiddleware(container.Config.Server.GetCORSAllowedOrigins()))
-	handler.RegisterRoutes(
-		router,
-		container.AuthHandler,
-		container.UserHandler,
-		container.ManagerHandler,
-		container.CountryHandler,
-		container.CareerHandler,
-		container.UserAuthMiddleware,
-		container.AdminAuthMiddleware,
-	)
 
-	// Server
+	hydraHandler := ory.NewHydraHandler(container.Config.Auth.HydraAdminURL)
+	auth := router.Group("/auth/hydra")
+	{
+		auth.GET("/login", hydraHandler.GetLoginRequest)
+		auth.POST("/login/accept", hydraHandler.AcceptLoginRequest)
+		auth.POST("/login/reject", hydraHandler.RejectLoginRequest)
+		auth.GET("/consent", hydraHandler.GetConsentRequest)
+		auth.POST("/consent/accept", hydraHandler.AcceptConsentRequest)
+		auth.POST("/consent/reject", hydraHandler.RejectConsentRequest)
+	}
+
 	addr := fmt.Sprintf(":%s", container.Config.Server.Port)
 	server := &http.Server{
 		Addr:         addr,
@@ -59,7 +59,7 @@ func serve(cmd *cobra.Command, args []string) {
 
 	go func() {
 		logrus.Infof("Starting server on %s", addr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logrus.Fatalf("Failed to start server: %v", err)
 		}
 	}()
