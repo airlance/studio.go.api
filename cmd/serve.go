@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/resoul/studio.go.api/internal/app"
 	"github.com/resoul/studio.go.api/internal/httpx"
-	"github.com/resoul/studio.go.api/internal/ory"
+	"github.com/resoul/studio.go.api/internal/middleware"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -38,15 +38,20 @@ func serve(cmd *cobra.Command, args []string) {
 	router := gin.Default()
 	router.Use(httpx.CORSMiddleware(container.Config.Server.GetCORSAllowedOrigins()))
 
-	hydraHandler := ory.NewHydraHandler(container.Config.Auth.HydraAdminURL)
-	auth := router.Group("/auth/hydra")
+	api := router.Group("/api/v1")
 	{
-		auth.GET("/login", hydraHandler.GetLoginRequest)
-		auth.POST("/login/accept", hydraHandler.AcceptLoginRequest)
-		auth.POST("/login/reject", hydraHandler.RejectLoginRequest)
-		auth.GET("/consent", hydraHandler.GetConsentRequest)
-		auth.POST("/consent/accept", hydraHandler.AcceptConsentRequest)
-		auth.POST("/consent/reject", hydraHandler.RejectConsentRequest)
+		api.GET("/health", func(c *gin.Context) {
+			httpx.RespondOK(c, gin.H{"status": "ok"})
+		})
+
+		protected := api.Group("")
+		protected.Use(middleware.AuthMiddleware(container.Config))
+		{
+			protected.GET("/user/me", func(c *gin.Context) {
+				user, _ := c.Get("user")
+				httpx.RespondOK(c, user)
+			})
+		}
 	}
 
 	addr := fmt.Sprintf(":%s", container.Config.Server.Port)

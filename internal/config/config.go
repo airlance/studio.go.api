@@ -14,10 +14,10 @@ import (
 type Config struct {
 	DB      DatabaseConfig `envconfig:"DB"`
 	Logging LoggingConfig  `envconfig:"LOG"`
-	Auth    AuthConfig     `envconfig:"AUTH"`
 	Server  ServerConfig   `envconfig:"SERVER"`
 	Mailer  MailerConfig   `envconfig:"MAILER"`
 	Storage StorageConfig  `envconfig:"STORAGE"`
+	Kratos  KratosConfig   `envconfig:"KRATOS"`
 }
 
 type DatabaseConfig struct {
@@ -26,15 +26,6 @@ type DatabaseConfig struct {
 
 type LoggingConfig struct {
 	Level string `envconfig:"LEVEL" default:"debug"`
-}
-
-type AuthConfig struct {
-	APITokens      string `envconfig:"API_TOKENS" required:"false"`
-	JWTSecret      string `envconfig:"JWT_SECRET" default:"dev-jwt-secret-change-me"`
-	JWTTTLMinutes  int    `envconfig:"JWT_TTL_MINUTES" default:"60"`
-	AdminRoles     string `envconfig:"ADMIN_ROLES" default:"admin"`
-	HydraAdminURL  string `envconfig:"HYDRA_ADMIN_URL" default:"http://hydra:4445"`
-	KratosAdminURL string `envconfig:"KRATOS_ADMIN_URL" default:"http://kratos:4434"`
 }
 
 type ServerConfig struct {
@@ -64,6 +55,11 @@ type StorageConfig struct {
 	UseSSL        bool   `envconfig:"USE_SSL" default:"false"`
 	ForcePath     bool   `envconfig:"FORCE_PATH_STYLE" default:"true"`
 	MaxAvatarMB   int64  `envconfig:"MAX_AVATAR_MB" default:"5"`
+}
+
+type KratosConfig struct {
+	AdminURL  string `envconfig:"ADMIN_URL" default:"http://kratos:4434"`
+	PublicURL string `envconfig:"PUBLIC_URL" default:"http://kratos:4433"`
 }
 
 func (s *ServerConfig) GetCORSAllowedOrigins() []string {
