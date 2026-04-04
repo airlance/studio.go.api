@@ -12,12 +12,13 @@ import (
 )
 
 type Config struct {
-	DB      DatabaseConfig `envconfig:"DB"`
-	Logging LoggingConfig  `envconfig:"LOG"`
-	Server  ServerConfig   `envconfig:"SERVER"`
-	Mailer  MailerConfig   `envconfig:"MAILER"`
-	Storage StorageConfig  `envconfig:"STORAGE"`
-	Kratos  KratosConfig   `envconfig:"KRATOS"`
+	DB       DatabaseConfig `envconfig:"DB"`
+	Logging  LoggingConfig  `envconfig:"LOG"`
+	Server   ServerConfig   `envconfig:"SERVER"`
+	Mailer   MailerConfig   `envconfig:"MAILER"`
+	Storage  StorageConfig  `envconfig:"STORAGE"`
+	Kratos   KratosConfig   `envconfig:"KRATOS"`
+	RabbitMQ RabbitMQConfig `envconfig:"RABBITMQ"`
 }
 
 type DatabaseConfig struct {
@@ -60,6 +61,10 @@ type StorageConfig struct {
 type KratosConfig struct {
 	AdminURL  string `envconfig:"ADMIN_URL" default:"http://kratos:4434"`
 	PublicURL string `envconfig:"PUBLIC_URL" default:"http://kratos:4433"`
+}
+
+type RabbitMQConfig struct {
+	URL string `envconfig:"URL" default:"amqp://guest:guest@localhost:5672/"`
 }
 
 func (s *ServerConfig) GetCORSAllowedOrigins() []string {

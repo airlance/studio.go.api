@@ -8,9 +8,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/resoul/studio.go.api/internal/app"
-	"github.com/resoul/studio.go.api/internal/httpx"
-	"github.com/resoul/studio.go.api/internal/middleware"
+	"github.com/resoul/studio.go.api/internal/config"
+	di2 "github.com/resoul/studio.go.api/internal/di"
+	"github.com/resoul/studio.go.api/internal/infrastructure/db"
+	"github.com/resoul/studio.go.api/internal/service"
+	"github.com/resoul/studio.go.api/internal/transport/http/handlers"
+	"github.com/resoul/studio.go.api/internal/transport/http/middleware"
+	"github.com/resoul/studio.go.api/internal/transport/http/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -25,36 +29,50 @@ var serveCmd = cobra.Command{
 
 func serve(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
-	container, err := app.NewContainer(ctx)
+	cfg := config.Init(ctx)
+
+	di, err := di2.NewContainer(ctx)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to build app container")
+		logrus.WithError(err).Fatal("Failed to initialize container")
 	}
-	defer func() {
-		if err := container.Close(); err != nil {
-			logrus.WithError(err).Error("Error closing database")
-		}
-	}()
+
+	profileRepo := db.NewProfileRepository(di.DB)
+	workspaceRepo := db.NewWorkspaceRepository(di.DB)
+
+	profileSvc := service.NewProfileService(profileRepo, di.Storage)
+	workspaceSvc := service.NewWorkspaceService(workspaceRepo, di.Storage)
+
+	profileHandler := handlers.NewProfileHandler(profileSvc, workspaceSvc)
+	workspaceHandler := handlers.NewWorkspaceHandler(workspaceSvc)
 
 	router := gin.Default()
-	router.Use(httpx.CORSMiddleware(container.Config.Server.GetCORSAllowedOrigins()))
+	router.Use(utils.CORSMiddleware(cfg.Server.GetCORSAllowedOrigins()))
 
 	api := router.Group("/api/v1")
 	{
 		api.GET("/health", func(c *gin.Context) {
-			httpx.RespondOK(c, gin.H{"status": "ok"})
+			utils.RespondOK(c, gin.H{"status": "ok"})
 		})
 
+		api.GET("/workspaces/invites/:token/preview", workspaceHandler.GetInvitePreview)
+
 		protected := api.Group("")
-		protected.Use(middleware.AuthMiddleware(container.Config))
+		protected.Use(middleware.AuthMiddleware(cfg))
 		{
-			protected.GET("/user/me", func(c *gin.Context) {
-				user, _ := c.Get("user")
-				httpx.RespondOK(c, user)
-			})
+			protected.GET("/user/me", profileHandler.GetMe)
+			protected.PATCH("/user/profile", profileHandler.UpdateProfile)
+
+			workspaces := protected.Group("/workspaces")
+			{
+				workspaces.GET("", workspaceHandler.List)
+				workspaces.POST("", workspaceHandler.Create)
+				workspaces.POST("/invites/:token/accept", workspaceHandler.AcceptInvite)
+				workspaces.POST("/:id/invites", workspaceHandler.CreateInvite)
+			}
 		}
 	}
 
-	addr := fmt.Sprintf(":%s", container.Config.Server.Port)
+	addr := fmt.Sprintf(":%s", cfg.Server.Port)
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      router,

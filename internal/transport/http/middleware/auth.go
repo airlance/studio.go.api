@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	ory "github.com/ory/client-go"
 	"github.com/resoul/studio.go.api/internal/config"
-	"github.com/resoul/studio.go.api/internal/httpx"
+	"github.com/resoul/studio.go.api/internal/transport/http/utils"
 )
 
 func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
@@ -22,7 +22,7 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionCookie, err := c.Cookie("ory_kratos_session")
 		if err != nil {
-			httpx.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "Missing session cookie")
+			utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "Missing session cookie")
 			c.Abort()
 			return
 		}
@@ -30,19 +30,25 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 		// Use the cookie to get the session from Kratos
 		session, _, err := client.FrontendAPI.ToSession(context.Background()).Cookie("ory_kratos_session=" + sessionCookie).Execute()
 		if err != nil {
-			httpx.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "Invalid session")
+			utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "Invalid session")
 			c.Abort()
 			return
 		}
 
 		if !session.GetActive() {
-			httpx.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "Session is inactive")
+			utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "Session is inactive")
 			c.Abort()
 			return
 		}
 
 		// Check if the user is verified
 		identity := session.GetIdentity()
+		if identity.Id == "" {
+			utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "No identity associated with session")
+			c.Abort()
+			return
+		}
+
 		verifiableAddresses := identity.VerifiableAddresses
 		isVerified := false
 
@@ -57,14 +63,14 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "SNAKE_CASE_USER_NOT_VERIFIED",
 				"message": "Please verify your email to access the dashboard",
-				"user":    identity,
+				"user":    &identity,
 			})
 			c.Abort()
 			return
 		}
 
 		// Store identity in context for later use
-		c.Set("user", identity)
+		c.Set("user", &identity)
 		c.Next()
 	}
 }
