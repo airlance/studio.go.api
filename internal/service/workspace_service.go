@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/resoul/studio.go.api/internal/domain"
+	"github.com/sirupsen/logrus"
 )
 
 type workspaceService struct {
@@ -27,9 +28,6 @@ func NewWorkspaceService(repo domain.WorkspaceRepository, storage domain.Storage
 func (s *workspaceService) CreateWorkspace(ctx context.Context, input domain.CreateWorkspaceInput) (*domain.Workspace, error) {
 	wsID := uuid.New()
 	slug := strings.ToLower(strings.ReplaceAll(input.Name, " ", "-"))
-
-	// In production, we should check if slug exists and handle collisions
-	// For now, let's keep it simple as in tmp
 
 	var logoURL string
 	if input.Logo != nil {
@@ -56,7 +54,6 @@ func (s *workspaceService) CreateWorkspace(ctx context.Context, input domain.Cre
 		return nil, err
 	}
 
-	// Add owner as admin member
 	member := &domain.WorkspaceMember{
 		WorkspaceID: wsID,
 		UserID:      input.OwnerID,
@@ -79,7 +76,9 @@ func (s *workspaceService) GetWorkspace(ctx context.Context, id uuid.UUID) (*dom
 
 	if ws.LogoURL != "" {
 		presigned, err := s.storage.GetPresignedURL(ctx, "workspaces", ws.LogoURL, time.Hour)
-		if err == nil {
+		if err != nil {
+			logrus.WithError(err).WithField("object", ws.LogoURL).Warn("failed to presign workspace logo")
+		} else {
 			ws.LogoURL = presigned
 		}
 	}
@@ -96,7 +95,9 @@ func (s *workspaceService) ListForUser(ctx context.Context, userID string) ([]do
 	for i := range workspaces {
 		if workspaces[i].LogoURL != "" {
 			presigned, err := s.storage.GetPresignedURL(ctx, "workspaces", workspaces[i].LogoURL, time.Hour)
-			if err == nil {
+			if err != nil {
+				logrus.WithError(err).WithField("object", workspaces[i].LogoURL).Warn("failed to presign workspace logo")
+			} else {
 				workspaces[i].LogoURL = presigned
 			}
 		}
@@ -112,7 +113,7 @@ func (s *workspaceService) InviteUser(ctx context.Context, workspaceID uuid.UUID
 		WorkspaceID: workspaceID,
 		Email:       email,
 		Role:        role,
-		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour), // 7 days TTL
+		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt:   time.Now(),
 	}
 
@@ -136,7 +137,9 @@ func (s *workspaceService) PreviewInvite(ctx context.Context, token string) (*do
 	ws := &invite.Workspace
 	if ws.LogoURL != "" {
 		presigned, err := s.storage.GetPresignedURL(ctx, "workspaces", ws.LogoURL, time.Hour)
-		if err == nil {
+		if err != nil {
+			logrus.WithError(err).WithField("object", ws.LogoURL).Warn("failed to presign invite workspace logo")
+		} else {
 			ws.LogoURL = presigned
 		}
 	}
@@ -167,7 +170,6 @@ func (s *workspaceService) AcceptInvite(ctx context.Context, token string, userI
 		return err
 	}
 
-	// Delete invite after acceptance
 	return s.repo.DeleteInvite(ctx, token)
 }
 
@@ -183,7 +185,6 @@ func (s *workspaceService) SetCurrentWorkspace(ctx context.Context, userID strin
 func (s *workspaceService) GetCurrentWorkspace(ctx context.Context, userID string) (*domain.Workspace, error) {
 	config, err := s.repo.GetCurrentWorkspace(ctx, userID)
 	if err != nil {
-		// Fallback: pick the first workspace the user belongs to
 		workspaces, err := s.repo.ListForUser(ctx, userID)
 		if err != nil {
 			return nil, err
@@ -192,10 +193,8 @@ func (s *workspaceService) GetCurrentWorkspace(ctx context.Context, userID strin
 			return nil, fmt.Errorf("user has no workspaces")
 		}
 
-		// Save this as the current one
 		firstWS := workspaces[0]
-		err = s.SetCurrentWorkspace(ctx, userID, firstWS.ID)
-		if err != nil {
+		if err := s.SetCurrentWorkspace(ctx, userID, firstWS.ID); err != nil {
 			return nil, err
 		}
 		return &firstWS, nil

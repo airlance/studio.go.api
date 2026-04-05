@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
-	"fmt"
 	"github.com/resoul/studio.go.api/internal/domain"
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -31,13 +32,11 @@ func (s *profileService) GetProfile(ctx context.Context, userID string) (*domain
 		return nil, err
 	}
 
-	if profile == nil {
-		return nil, nil // Or handle as error
-	}
-
 	if profile.AvatarURL != "" {
 		presigned, err := s.storage.GetPresignedURL(ctx, "profiles", profile.AvatarURL, time.Hour)
-		if err == nil {
+		if err != nil {
+			logrus.WithError(err).WithField("object", profile.AvatarURL).Warn("failed to presign avatar")
+		} else {
 			profile.AvatarURL = presigned
 		}
 	}
@@ -69,10 +68,11 @@ func (s *profileService) UpdateProfile(ctx context.Context, userID string, input
 		return nil, err
 	}
 
-	// For the response, get the presigned URL
 	if profile.AvatarURL != "" {
 		presigned, err := s.storage.GetPresignedURL(ctx, "profiles", profile.AvatarURL, time.Hour)
-		if err == nil {
+		if err != nil {
+			logrus.WithError(err).WithField("object", profile.AvatarURL).Warn("failed to presign avatar after update")
+		} else {
 			profile.AvatarURL = presigned
 		}
 	}
@@ -91,11 +91,9 @@ func (s *profileService) EnsureProfileExists(ctx context.Context, userID string)
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
-
 		if err := s.repo.Create(ctx, profile); err != nil {
 			return nil, err
 		}
 	}
-
 	return profile, nil
 }
