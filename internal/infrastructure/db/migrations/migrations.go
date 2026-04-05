@@ -16,6 +16,7 @@ func All() []*gormigrate.Migration {
 					&domain.Workspace{},
 					&domain.WorkspaceMember{},
 					&domain.WorkspaceInvite{},
+					&domain.UserWorkspaceConfig{},
 				)
 			},
 			Rollback: func(tx *gorm.DB) error {
@@ -24,6 +25,7 @@ func All() []*gormigrate.Migration {
 					&domain.WorkspaceMember{},
 					&domain.Workspace{},
 					&domain.Profile{},
+					&domain.UserWorkspaceConfig{},
 				)
 			},
 		},

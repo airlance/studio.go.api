@@ -79,3 +79,15 @@ func (r *workspaceRepository) GetInvite(ctx context.Context, token string) (*dom
 func (r *workspaceRepository) DeleteInvite(ctx context.Context, token string) error {
 	return r.db.WithContext(ctx).Delete(&domain.WorkspaceInvite{}, "token = ?", token).Error
 }
+
+func (r *workspaceRepository) SetCurrentWorkspace(ctx context.Context, config *domain.UserWorkspaceConfig) error {
+	return r.db.WithContext(ctx).Save(config).Error
+}
+
+func (r *workspaceRepository) GetCurrentWorkspace(ctx context.Context, userID string) (*domain.UserWorkspaceConfig, error) {
+	var config domain.UserWorkspaceConfig
+	if err := r.db.WithContext(ctx).First(&config, "user_id = ?", userID).Error; err != nil {
+		return nil, err
+	}
+	return &config, nil
+}

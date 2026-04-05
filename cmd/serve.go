@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/resoul/studio.go.api/internal/config"
-	di2 "github.com/resoul/studio.go.api/internal/di"
+	"github.com/resoul/studio.go.api/internal/di"
 	"github.com/resoul/studio.go.api/internal/infrastructure/db"
 	"github.com/resoul/studio.go.api/internal/service"
 	"github.com/resoul/studio.go.api/internal/transport/http/handlers"
@@ -23,24 +23,25 @@ var serveCmd = cobra.Command{
 	Use:  "serve",
 	Long: "Start API server",
 	Run: func(cmd *cobra.Command, args []string) {
-		serve(cmd, args)
+		serve(cmd)
 	},
 }
 
-func serve(cmd *cobra.Command, args []string) {
+func serve(cmd *cobra.Command) {
 	ctx := cmd.Context()
 	cfg := config.Init(ctx)
 
-	di, err := di2.NewContainer(ctx)
+	container, err := di.NewContainer(ctx)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize container")
 	}
+	defer container.Close()
 
-	profileRepo := db.NewProfileRepository(di.DB)
-	workspaceRepo := db.NewWorkspaceRepository(di.DB)
+	profileRepo := db.NewProfileRepository(container.DB)
+	workspaceRepo := db.NewWorkspaceRepository(container.DB)
 
-	profileSvc := service.NewProfileService(profileRepo, di.Storage)
-	workspaceSvc := service.NewWorkspaceService(workspaceRepo, di.Storage)
+	profileSvc := service.NewProfileService(profileRepo, container.Storage)
+	workspaceSvc := service.NewWorkspaceService(workspaceRepo, container.Storage)
 
 	profileHandler := handlers.NewProfileHandler(profileSvc, workspaceSvc)
 	workspaceHandler := handlers.NewWorkspaceHandler(workspaceSvc)
@@ -68,6 +69,9 @@ func serve(cmd *cobra.Command, args []string) {
 				workspaces.POST("", workspaceHandler.Create)
 				workspaces.POST("/invites/:token/accept", workspaceHandler.AcceptInvite)
 				workspaces.POST("/:id/invites", workspaceHandler.CreateInvite)
+
+				workspaces.GET("/current", workspaceHandler.GetCurrent)
+				workspaces.POST("/current/:id", workspaceHandler.SetCurrent)
 			}
 		}
 	}

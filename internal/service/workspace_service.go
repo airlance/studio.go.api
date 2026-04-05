@@ -171,6 +171,39 @@ func (s *workspaceService) AcceptInvite(ctx context.Context, token string, userI
 	return s.repo.DeleteInvite(ctx, token)
 }
 
+func (s *workspaceService) SetCurrentWorkspace(ctx context.Context, userID string, workspaceID uuid.UUID) error {
+	config := &domain.UserWorkspaceConfig{
+		UserID:             userID,
+		CurrentWorkspaceID: workspaceID,
+		UpdatedAt:          time.Now(),
+	}
+	return s.repo.SetCurrentWorkspace(ctx, config)
+}
+
+func (s *workspaceService) GetCurrentWorkspace(ctx context.Context, userID string) (*domain.Workspace, error) {
+	config, err := s.repo.GetCurrentWorkspace(ctx, userID)
+	if err != nil {
+		// Fallback: pick the first workspace the user belongs to
+		workspaces, err := s.repo.ListForUser(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if len(workspaces) == 0 {
+			return nil, fmt.Errorf("user has no workspaces")
+		}
+
+		// Save this as the current one
+		firstWS := workspaces[0]
+		err = s.SetCurrentWorkspace(ctx, userID, firstWS.ID)
+		if err != nil {
+			return nil, err
+		}
+		return &firstWS, nil
+	}
+
+	return s.GetWorkspace(ctx, config.CurrentWorkspaceID)
+}
+
 func generateRandomToken(length int) (string, error) {
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {

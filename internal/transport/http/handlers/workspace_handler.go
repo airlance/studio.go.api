@@ -151,3 +151,44 @@ func (h *WorkspaceHandler) CreateInvite(c *gin.Context) {
 
 	utils.RespondOK(c, invite)
 }
+
+func (h *WorkspaceHandler) GetCurrent(c *gin.Context) {
+	identity, exists := c.Get("user")
+	if !exists {
+		utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "User not found in context")
+		return
+	}
+	oryIdentity := identity.(*ory.Identity)
+
+	ws, err := h.service.GetCurrentWorkspace(c.Request.Context(), oryIdentity.Id)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "SNAKE_CASE_INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	utils.RespondOK(c, ws)
+}
+
+func (h *WorkspaceHandler) SetCurrent(c *gin.Context) {
+	identity, exists := c.Get("user")
+	if !exists {
+		utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "User not found in context")
+		return
+	}
+	oryIdentity := identity.(*ory.Identity)
+
+	wsIDStr := c.Param("id")
+	wsID, err := uuid.Parse(wsIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "SNAKE_CASE_INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	err = h.service.SetCurrentWorkspace(c.Request.Context(), oryIdentity.Id, wsID)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "SNAKE_CASE_INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

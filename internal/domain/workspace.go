@@ -47,6 +47,12 @@ type WorkspaceInvite struct {
 	Workspace Workspace `gorm:"foreignKey:WorkspaceID" json:"-"`
 }
 
+type UserWorkspaceConfig struct {
+	UserID             string    `gorm:"primaryKey" json:"user_id"`
+	CurrentWorkspaceID uuid.UUID `gorm:"type:uuid" json:"current_workspace_id"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
 type WorkspaceRepository interface {
 	Create(ctx context.Context, ws *Workspace) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Workspace, error)
@@ -60,6 +66,9 @@ type WorkspaceRepository interface {
 	CreateInvite(ctx context.Context, invite *WorkspaceInvite) error
 	GetInvite(ctx context.Context, token string) (*WorkspaceInvite, error)
 	DeleteInvite(ctx context.Context, token string) error
+
+	SetCurrentWorkspace(ctx context.Context, config *UserWorkspaceConfig) error
+	GetCurrentWorkspace(ctx context.Context, userID string) (*UserWorkspaceConfig, error)
 }
 
 type CreateWorkspaceInput struct {
@@ -79,6 +88,9 @@ type WorkspaceService interface {
 	InviteUser(ctx context.Context, workspaceID uuid.UUID, email string, role WorkspaceRole) (*WorkspaceInvite, error)
 	PreviewInvite(ctx context.Context, token string) (*Workspace, int64, error)
 	AcceptInvite(ctx context.Context, token string, userID string) error
+
+	SetCurrentWorkspace(ctx context.Context, userID string, workspaceID uuid.UUID) error
+	GetCurrentWorkspace(ctx context.Context, userID string) (*Workspace, error)
 }
 
 type Storage interface {
