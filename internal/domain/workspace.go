@@ -48,9 +48,12 @@ type WorkspaceInvite struct {
 }
 
 type UserWorkspaceConfig struct {
-	UserID             string    `gorm:"primaryKey" json:"user_id"`
-	CurrentWorkspaceID uuid.UUID `gorm:"type:uuid" json:"current_workspace_id"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	UserID      string    `gorm:"primaryKey" json:"user_id"`
+	WorkspaceID uuid.UUID `gorm:"primaryKey;type:uuid" json:"workspace_id"`
+	Language    string    `json:"language"`
+	Theme       string    `json:"theme"`
+	IsCurrent   bool      `json:"is_current"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type WorkspaceRepository interface {
@@ -70,6 +73,7 @@ type WorkspaceRepository interface {
 
 	SetCurrentWorkspace(ctx context.Context, config *UserWorkspaceConfig) error
 	GetCurrentWorkspace(ctx context.Context, userID string) (*UserWorkspaceConfig, error)
+	UpdateConfig(ctx context.Context, config *UserWorkspaceConfig) error
 }
 
 type CreateWorkspaceInput struct {
@@ -101,6 +105,8 @@ type WorkspaceService interface {
 	SetCurrentWorkspace(ctx context.Context, userID string, workspaceID uuid.UUID) error
 	GetCurrentWorkspace(ctx context.Context, userID string) (*Workspace, error)
 	UpdateWorkspace(ctx context.Context, id uuid.UUID, input UpdateWorkspaceInput) (*Workspace, error)
+	UpdateConfig(ctx context.Context, userID string, workspaceID uuid.UUID, language, theme string) error
+	GetCurrentConfig(ctx context.Context, userID string) (*UserWorkspaceConfig, error)
 }
 
 type Storage interface {

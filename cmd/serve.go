@@ -73,6 +73,9 @@ func serve(cmd *cobra.Command) {
 
 				workspaces.GET("/current", workspaceHandler.GetCurrent)
 				workspaces.POST("/current/:id", workspaceHandler.SetCurrent)
+
+				workspaces.GET("/config", workspaceHandler.GetConfig)
+				workspaces.PATCH("/config/:id", workspaceHandler.UpdateConfig)
 			}
 		}
 	}

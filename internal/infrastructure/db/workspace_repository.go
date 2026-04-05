@@ -81,15 +81,30 @@ func (r *workspaceRepository) DeleteInvite(ctx context.Context, token string) er
 }
 
 func (r *workspaceRepository) SetCurrentWorkspace(ctx context.Context, config *domain.UserWorkspaceConfig) error {
-	return r.db.WithContext(ctx).Save(config).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Reset all current flags for this user
+		if err := tx.Model(&domain.UserWorkspaceConfig{}).
+			Where("user_id = ?", config.UserID).
+			Update("is_current", false).Error; err != nil {
+			return err
+		}
+
+		// Set the new current workspace
+		config.IsCurrent = true
+		return tx.Save(config).Error
+	})
 }
 
 func (r *workspaceRepository) GetCurrentWorkspace(ctx context.Context, userID string) (*domain.UserWorkspaceConfig, error) {
 	var config domain.UserWorkspaceConfig
-	if err := r.db.WithContext(ctx).First(&config, "user_id = ?", userID).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("user_id = ? AND is_current = ?", userID, true).First(&config).Error; err != nil {
 		return nil, err
 	}
 	return &config, nil
+}
+
+func (r *workspaceRepository) UpdateConfig(ctx context.Context, config *domain.UserWorkspaceConfig) error {
+	return r.db.WithContext(ctx).Save(config).Error
 }
 
 func (r *workspaceRepository) Update(ctx context.Context, ws *domain.Workspace) error {

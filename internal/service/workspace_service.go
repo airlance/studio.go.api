@@ -79,7 +79,7 @@ func (s *workspaceService) GetWorkspace(ctx context.Context, id uuid.UUID) (*dom
 		if err != nil {
 			logrus.WithError(err).WithField("object", ws.LogoURL).Warn("failed to presign workspace logo")
 		} else {
-			ws.LogoURL = presigned
+			ws.LogoURL = fmt.Sprintf("%s?v=%d", presigned, ws.UpdatedAt.Unix())
 		}
 	}
 
@@ -98,7 +98,7 @@ func (s *workspaceService) ListForUser(ctx context.Context, userID string) ([]do
 			if err != nil {
 				logrus.WithError(err).WithField("object", workspaces[i].LogoURL).Warn("failed to presign workspace logo")
 			} else {
-				workspaces[i].LogoURL = presigned
+				workspaces[i].LogoURL = fmt.Sprintf("%s?v=%d", presigned, workspaces[i].UpdatedAt.Unix())
 			}
 		}
 	}
@@ -140,7 +140,7 @@ func (s *workspaceService) PreviewInvite(ctx context.Context, token string) (*do
 		if err != nil {
 			logrus.WithError(err).WithField("object", ws.LogoURL).Warn("failed to presign invite workspace logo")
 		} else {
-			ws.LogoURL = presigned
+			ws.LogoURL = fmt.Sprintf("%s?v=%d", presigned, ws.UpdatedAt.Unix())
 		}
 	}
 
@@ -175,9 +175,9 @@ func (s *workspaceService) AcceptInvite(ctx context.Context, token string, userI
 
 func (s *workspaceService) SetCurrentWorkspace(ctx context.Context, userID string, workspaceID uuid.UUID) error {
 	config := &domain.UserWorkspaceConfig{
-		UserID:             userID,
-		CurrentWorkspaceID: workspaceID,
-		UpdatedAt:          time.Now(),
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		UpdatedAt:   time.Now(),
 	}
 	return s.repo.SetCurrentWorkspace(ctx, config)
 }
@@ -200,7 +200,29 @@ func (s *workspaceService) GetCurrentWorkspace(ctx context.Context, userID strin
 		return &firstWS, nil
 	}
 
-	return s.GetWorkspace(ctx, config.CurrentWorkspaceID)
+	return s.GetWorkspace(ctx, config.WorkspaceID)
+}
+
+func (s *workspaceService) UpdateConfig(ctx context.Context, userID string, workspaceID uuid.UUID, language, theme string) error {
+	config, err := s.repo.GetCurrentWorkspace(ctx, userID)
+	if err != nil || config.WorkspaceID != workspaceID {
+		// If not current or doesn't exist, we might want to fetch the specific one
+		// but for simplicity let's just create/update the current one
+		config = &domain.UserWorkspaceConfig{
+			UserID:      userID,
+			WorkspaceID: workspaceID,
+		}
+	}
+
+	config.Language = language
+	config.Theme = theme
+	config.UpdatedAt = time.Now()
+
+	return s.repo.UpdateConfig(ctx, config)
+}
+
+func (s *workspaceService) GetCurrentConfig(ctx context.Context, userID string) (*domain.UserWorkspaceConfig, error) {
+	return s.repo.GetCurrentWorkspace(ctx, userID)
 }
 
 func (s *workspaceService) UpdateWorkspace(ctx context.Context, id uuid.UUID, input domain.UpdateWorkspaceInput) (*domain.Workspace, error) {

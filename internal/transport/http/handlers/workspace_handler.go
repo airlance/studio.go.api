@@ -224,3 +224,54 @@ func (h *WorkspaceHandler) Update(c *gin.Context) {
 
 	utils.RespondOK(c, ws)
 }
+
+func (h *WorkspaceHandler) GetConfig(c *gin.Context) {
+	identity, exists := c.Get("user")
+	if !exists {
+		utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "User not found in context")
+		return
+	}
+	oryIdentity := identity.(*ory.Identity)
+
+	config, err := h.service.GetCurrentConfig(c.Request.Context(), oryIdentity.Id)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "SNAKE_CASE_INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	utils.RespondOK(c, config)
+}
+
+func (h *WorkspaceHandler) UpdateConfig(c *gin.Context) {
+	identity, exists := c.Get("user")
+	if !exists {
+		utils.RespondError(c, http.StatusUnauthorized, "SNAKE_CASE_UNAUTHORIZED", "User not found in context")
+		return
+	}
+	oryIdentity := identity.(*ory.Identity)
+
+	wsIDStr := c.Param("id")
+	wsID, err := uuid.Parse(wsIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "SNAKE_CASE_INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	var req struct {
+		Language string `json:"language"`
+		Theme    string `json:"theme"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "SNAKE_CASE_INVALID_INPUT", err.Error())
+		return
+	}
+
+	err = h.service.UpdateConfig(c.Request.Context(), oryIdentity.Id, wsID, req.Language, req.Theme)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "SNAKE_CASE_INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
