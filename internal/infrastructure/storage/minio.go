@@ -14,8 +14,9 @@ import (
 )
 
 type minioStorage struct {
-	client *minio.Client
-	cfg    *config.Config
+	client       *minio.Client
+	publicClient *minio.Client
+	cfg          *config.Config
 }
 
 func NewMinioStorage(cfg *config.Config) (domain.Storage, error) {
@@ -33,9 +34,27 @@ func NewMinioStorage(cfg *config.Config) (domain.Storage, error) {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
 	}
 
+	var publicClient *minio.Client
+	if cfg.Storage.PublicBaseURL != "" {
+		publicEndpoint := cfg.Storage.PublicBaseURL
+		pu, err := url.Parse(publicEndpoint)
+		if err == nil && pu.Host != "" {
+			publicEndpoint = pu.Host
+		}
+
+		publicClient, err = minio.New(publicEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(cfg.Storage.AccessKeyID, cfg.Storage.SecretKey, ""),
+			Secure: cfg.Storage.UseSSL,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create public minio client: %w", err)
+		}
+	}
+
 	storage := &minioStorage{
-		client: client,
-		cfg:    cfg,
+		client:       client,
+		publicClient: publicClient,
+		cfg:          cfg,
 	}
 
 	// Ensure required buckets exist
@@ -65,9 +84,15 @@ func (s *minioStorage) Upload(ctx context.Context, bucketName, objectName string
 }
 
 func (s *minioStorage) GetPresignedURL(ctx context.Context, bucketName, objectName string, expires time.Duration) (string, error) {
-	presignedURL, err := s.client.PresignedGetObject(ctx, bucketName, objectName, expires, nil)
+	client := s.client
+	if s.publicClient != nil {
+		client = s.publicClient
+	}
+
+	presignedURL, err := client.PresignedGetObject(ctx, bucketName, objectName, expires, nil)
 	if err != nil {
 		return "", err
 	}
+
 	return presignedURL.String(), nil
 }
