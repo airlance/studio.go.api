@@ -93,12 +93,22 @@ type UpdateWorkspaceInput struct {
 	LogoType    string    `json:"-"`
 }
 
+type CreateInviteInput struct {
+	WorkspaceID uuid.UUID
+	Email       string
+	Role        WorkspaceRole
+	SendEmail   bool
+	// InviteBaseURL is used to build the clickable invite link in the email body.
+	// Populated by the handler from config or the incoming request origin.
+	InviteBaseURL string
+}
+
 type WorkspaceService interface {
 	CreateWorkspace(ctx context.Context, input CreateWorkspaceInput) (*Workspace, error)
 	GetWorkspace(ctx context.Context, id uuid.UUID) (*Workspace, error)
 	ListForUser(ctx context.Context, userID string) ([]Workspace, error)
 
-	InviteUser(ctx context.Context, workspaceID uuid.UUID, email string, role WorkspaceRole) (*WorkspaceInvite, error)
+	InviteUser(ctx context.Context, input CreateInviteInput) (*WorkspaceInvite, error)
 	PreviewInvite(ctx context.Context, token string) (*Workspace, int64, error)
 	AcceptInvite(ctx context.Context, token string, userID string) error
 

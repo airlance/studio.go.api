@@ -16,12 +16,14 @@ import (
 type workspaceService struct {
 	repo    domain.WorkspaceRepository
 	storage domain.Storage
+	mailer  domain.Mailer
 }
 
-func NewWorkspaceService(repo domain.WorkspaceRepository, storage domain.Storage) domain.WorkspaceService {
+func NewWorkspaceService(repo domain.WorkspaceRepository, storage domain.Storage, mailer domain.Mailer) domain.WorkspaceService {
 	return &workspaceService{
 		repo:    repo,
 		storage: storage,
+		mailer:  mailer,
 	}
 }
 
@@ -32,8 +34,7 @@ func (s *workspaceService) CreateWorkspace(ctx context.Context, input domain.Cre
 	var logoURL string
 	if input.Logo != nil {
 		objectName := fmt.Sprintf("logos/%s/%s", wsID.String(), "logo")
-		err := s.storage.Upload(ctx, "workspaces", objectName, input.Logo, input.LogoSize, input.LogoType)
-		if err != nil {
+		if err := s.storage.Upload(ctx, "workspaces", objectName, input.Logo, input.LogoSize, input.LogoType); err != nil {
 			return nil, fmt.Errorf("failed to upload logo: %w", err)
 		}
 		logoURL = objectName
@@ -60,7 +61,6 @@ func (s *workspaceService) CreateWorkspace(ctx context.Context, input domain.Cre
 		Role:        domain.RoleAdmin,
 		JoinedAt:    time.Now(),
 	}
-
 	if err := s.repo.AddMember(ctx, member); err != nil {
 		return nil, err
 	}
@@ -73,7 +73,6 @@ func (s *workspaceService) GetWorkspace(ctx context.Context, id uuid.UUID) (*dom
 	if err != nil {
 		return nil, err
 	}
-
 	if ws.LogoURL != "" {
 		presigned, err := s.storage.GetPresignedURL(ctx, "workspaces", ws.LogoURL, time.Hour)
 		if err != nil {
@@ -82,7 +81,6 @@ func (s *workspaceService) GetWorkspace(ctx context.Context, id uuid.UUID) (*dom
 			ws.LogoURL = fmt.Sprintf("%s?v=%d", presigned, ws.UpdatedAt.Unix())
 		}
 	}
-
 	return ws, nil
 }
 
@@ -91,7 +89,6 @@ func (s *workspaceService) ListForUser(ctx context.Context, userID string) ([]do
 	if err != nil {
 		return nil, err
 	}
-
 	for i := range workspaces {
 		if workspaces[i].LogoURL != "" {
 			presigned, err := s.storage.GetPresignedURL(ctx, "workspaces", workspaces[i].LogoURL, time.Hour)
@@ -102,17 +99,20 @@ func (s *workspaceService) ListForUser(ctx context.Context, userID string) ([]do
 			}
 		}
 	}
-
 	return workspaces, nil
 }
 
-func (s *workspaceService) InviteUser(ctx context.Context, workspaceID uuid.UUID, email string, role domain.WorkspaceRole) (*domain.WorkspaceInvite, error) {
-	token, _ := generateRandomToken(32)
+func (s *workspaceService) InviteUser(ctx context.Context, input domain.CreateInviteInput) (*domain.WorkspaceInvite, error) {
+	token, err := generateRandomToken(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate invite token: %w", err)
+	}
+
 	invite := &domain.WorkspaceInvite{
 		Token:       token,
-		WorkspaceID: workspaceID,
-		Email:       email,
-		Role:        role,
+		WorkspaceID: input.WorkspaceID,
+		Email:       input.Email,
+		Role:        input.Role,
 		ExpiresAt:   time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt:   time.Now(),
 	}
@@ -121,7 +121,48 @@ func (s *workspaceService) InviteUser(ctx context.Context, workspaceID uuid.UUID
 		return nil, err
 	}
 
+	if input.SendEmail {
+		if err := s.sendInviteEmail(ctx, invite, input.InviteBaseURL); err != nil {
+			// Non-fatal: invite is saved, email failure should not roll back.
+			logrus.WithError(err).
+				WithField("invite_token", token).
+				WithField("email", input.Email).
+				Warn("invite created but email delivery failed")
+		}
+	}
+
 	return invite, nil
+}
+
+func (s *workspaceService) sendInviteEmail(ctx context.Context, invite *domain.WorkspaceInvite, baseURL string) error {
+	ws, err := s.repo.FindByID(ctx, invite.WorkspaceID)
+	if err != nil {
+		return fmt.Errorf("could not load workspace for invite email: %w", err)
+	}
+
+	link := fmt.Sprintf("%s/invites/%s", strings.TrimRight(baseURL, "/"), invite.Token)
+	expiresIn := "7 days"
+
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;color:#1a1a1a;max-width:480px;margin:0 auto;padding:32px 16px">
+  <h2 style="margin-bottom:8px">You've been invited</h2>
+  <p>You have been invited to join <strong>%s</strong> as <strong>%s</strong>.</p>
+  <p style="margin:24px 0">
+    <a href="%s"
+       style="background:#18181b;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">
+      Accept Invitation
+    </a>
+  </p>
+  <p style="color:#71717a;font-size:13px">This link expires in %s. If you did not expect this invitation, you can ignore this email.</p>
+</body>
+</html>`, ws.Name, string(invite.Role), link, expiresIn)
+
+	return s.mailer.Send(ctx, domain.MailMessage{
+		To:      []string{invite.Email},
+		Subject: fmt.Sprintf("You've been invited to %s", ws.Name),
+		HTML:    html,
+	})
 }
 
 func (s *workspaceService) PreviewInvite(ctx context.Context, token string) (*domain.Workspace, int64, error) {
@@ -129,7 +170,6 @@ func (s *workspaceService) PreviewInvite(ctx context.Context, token string) (*do
 	if err != nil {
 		return nil, 0, err
 	}
-
 	if time.Now().After(invite.ExpiresAt) {
 		return nil, 0, fmt.Errorf("invite expired")
 	}
@@ -145,7 +185,6 @@ func (s *workspaceService) PreviewInvite(ctx context.Context, token string) (*do
 	}
 
 	count, _ := s.repo.CountMembers(ctx, ws.ID)
-
 	return ws, count, nil
 }
 
@@ -154,7 +193,6 @@ func (s *workspaceService) AcceptInvite(ctx context.Context, token string, userI
 	if err != nil {
 		return err
 	}
-
 	if time.Now().After(invite.ExpiresAt) {
 		return fmt.Errorf("invite expired")
 	}
@@ -165,7 +203,6 @@ func (s *workspaceService) AcceptInvite(ctx context.Context, token string, userI
 		Role:        invite.Role,
 		JoinedAt:    time.Now(),
 	}
-
 	if err := s.repo.AddMember(ctx, member); err != nil {
 		return err
 	}
@@ -192,32 +229,26 @@ func (s *workspaceService) GetCurrentWorkspace(ctx context.Context, userID strin
 		if len(workspaces) == 0 {
 			return nil, fmt.Errorf("user has no workspaces")
 		}
-
 		firstWS := workspaces[0]
 		if err := s.SetCurrentWorkspace(ctx, userID, firstWS.ID); err != nil {
 			return nil, err
 		}
 		return &firstWS, nil
 	}
-
 	return s.GetWorkspace(ctx, config.WorkspaceID)
 }
 
 func (s *workspaceService) UpdateConfig(ctx context.Context, userID string, workspaceID uuid.UUID, language, theme string) error {
 	config, err := s.repo.GetCurrentWorkspace(ctx, userID)
 	if err != nil || config.WorkspaceID != workspaceID {
-		// If not current or doesn't exist, we might want to fetch the specific one
-		// but for simplicity let's just create/update the current one
 		config = &domain.UserWorkspaceConfig{
 			UserID:      userID,
 			WorkspaceID: workspaceID,
 		}
 	}
-
 	config.Language = language
 	config.Theme = theme
 	config.UpdatedAt = time.Now()
-
 	return s.repo.UpdateConfig(ctx, config)
 }
 
@@ -230,7 +261,6 @@ func (s *workspaceService) UpdateWorkspace(ctx context.Context, id uuid.UUID, in
 	if err != nil {
 		return nil, err
 	}
-
 	if input.Name != "" {
 		ws.Name = input.Name
 		ws.Slug = strings.ToLower(strings.ReplaceAll(input.Name, " ", "-"))
@@ -238,22 +268,17 @@ func (s *workspaceService) UpdateWorkspace(ctx context.Context, id uuid.UUID, in
 	if input.Description != "" {
 		ws.Description = input.Description
 	}
-
 	if input.Logo != nil {
 		objectName := fmt.Sprintf("logos/%s/%s", ws.ID.String(), "logo")
-		err := s.storage.Upload(ctx, "workspaces", objectName, input.Logo, input.LogoSize, input.LogoType)
-		if err != nil {
+		if err := s.storage.Upload(ctx, "workspaces", objectName, input.Logo, input.LogoSize, input.LogoType); err != nil {
 			return nil, fmt.Errorf("failed to upload logo: %w", err)
 		}
 		ws.LogoURL = objectName
 	}
-
 	ws.UpdatedAt = time.Now()
-
 	if err := s.repo.Update(ctx, ws); err != nil {
 		return nil, err
 	}
-
 	return s.GetWorkspace(ctx, ws.ID)
 }
 

@@ -41,7 +41,7 @@ func serve(cmd *cobra.Command) {
 	workspaceRepo := db.NewWorkspaceRepository(container.DB)
 
 	profileSvc := service.NewProfileService(profileRepo, container.Storage)
-	workspaceSvc := service.NewWorkspaceService(workspaceRepo, container.Storage)
+	workspaceSvc := service.NewWorkspaceService(workspaceRepo, container.Storage, container.Mailer)
 
 	profileHandler := handlers.NewProfileHandler(profileSvc, workspaceSvc)
 	workspaceHandler := handlers.NewWorkspaceHandler(workspaceSvc)

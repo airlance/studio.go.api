@@ -6,6 +6,7 @@ import (
 
 	"github.com/resoul/studio.go.api/internal/config"
 	"github.com/resoul/studio.go.api/internal/domain"
+	"github.com/resoul/studio.go.api/internal/infrastructure/mailer" //nolint:typecheck
 	"github.com/resoul/studio.go.api/internal/infrastructure/rabbitmq"
 	"github.com/resoul/studio.go.api/internal/infrastructure/storage"
 	"gorm.io/driver/postgres"
@@ -17,6 +18,7 @@ type Container struct {
 	Config   *config.Config
 	DB       *gorm.DB
 	Storage  domain.Storage
+	Mailer   domain.Mailer
 	RabbitMQ *rabbitmq.Client
 }
 
@@ -44,12 +46,19 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		return nil, err
 	}
 
+	mailerSvc, err := mailer.New(&cfg.Mailer)
+	if err != nil {
+		return nil, err
+	}
+
 	rbmqClient, err := rabbitmq.NewClient(&cfg.RabbitMQ)
 	if err != nil {
+		// RabbitMQ is optional — degrade gracefully.
 		return &Container{
 			Config:  cfg,
 			DB:      db,
 			Storage: storageSvc,
+			Mailer:  mailerSvc,
 		}, nil
 	}
 
@@ -57,6 +66,7 @@ func NewContainer(ctx context.Context) (*Container, error) {
 		Config:   cfg,
 		DB:       db,
 		Storage:  storageSvc,
+		Mailer:   mailerSvc,
 		RabbitMQ: rbmqClient,
 	}, nil
 }
