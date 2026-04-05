@@ -19,16 +19,26 @@ import (
 const inviteQueue = "workspace.invites"
 
 type workspaceService struct {
-	repo    domain.WorkspaceRepository
-	storage domain.Storage
-	rbmq    *rabbitmq.Client // optional — nil when RabbitMQ is unavailable
+	repo        domain.WorkspaceRepository
+	profileRepo domain.ProfileRepository
+	userRepo    domain.UserRepository
+	storage     domain.Storage
+	rbmq        *rabbitmq.Client // optional — nil when RabbitMQ is unavailable
 }
 
-func NewWorkspaceService(repo domain.WorkspaceRepository, storage domain.Storage, rbmq *rabbitmq.Client) domain.WorkspaceService {
+func NewWorkspaceService(
+	repo domain.WorkspaceRepository,
+	profileRepo domain.ProfileRepository,
+	userRepo domain.UserRepository,
+	storage domain.Storage,
+	rbmq *rabbitmq.Client,
+) domain.WorkspaceService {
 	return &workspaceService{
-		repo:    repo,
-		storage: storage,
-		rbmq:    rbmq,
+		repo:        repo,
+		profileRepo: profileRepo,
+		userRepo:    userRepo,
+		storage:     storage,
+		rbmq:        rbmq,
 	}
 }
 
@@ -134,6 +144,10 @@ func (s *workspaceService) InviteUser(ctx context.Context, input domain.CreateIn
 	}
 
 	return invite, nil
+}
+
+func (s *workspaceService) ListInvites(ctx context.Context, workspaceID uuid.UUID) ([]domain.WorkspaceInvite, error) {
+	return s.repo.ListInvites(ctx, workspaceID)
 }
 
 // publishInviteEvent enqueues the email delivery task.
@@ -303,6 +317,79 @@ func (s *workspaceService) UpdateWorkspace(ctx context.Context, id uuid.UUID, in
 		return nil, err
 	}
 	return s.GetWorkspace(ctx, ws.ID)
+}
+
+func (s *workspaceService) ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]domain.MemberInfo, error) {
+	members, err := s.repo.ListMembers(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]domain.MemberInfo, 0, len(members))
+	for _, m := range members {
+		info := domain.MemberInfo{
+			WorkspaceMember: m,
+		}
+
+		// Fetch profile
+		profile, err := s.profileRepo.FindByID(ctx, m.UserID)
+		if err == nil {
+			info.FirstName = profile.FirstName
+			info.LastName = profile.LastName
+			info.AvatarURL = profile.AvatarURL
+		}
+
+		// Fetch email from Kratos
+		user, err := s.userRepo.GetIdentity(ctx, m.UserID)
+		if err == nil {
+			info.Email = user.Email
+		}
+
+		result = append(result, info)
+	}
+
+	return result, nil
+}
+
+func (s *workspaceService) RemoveMember(ctx context.Context, workspaceID uuid.UUID, userID string) error {
+	// Check if target is owner
+	ws, err := s.repo.FindByID(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if ws.OwnerID == userID {
+		return fmt.Errorf("cannot remove workspace owner")
+	}
+
+	return s.repo.DeleteMember(ctx, workspaceID, userID)
+}
+
+func (s *workspaceService) ResendInvite(ctx context.Context, workspaceID uuid.UUID, email string, baseURL string) (*domain.WorkspaceInvite, error) {
+	// Re-use InviteUser logic but first clean up old invite for this email in this workspace
+	_ = s.repo.DeleteInviteByEmail(ctx, workspaceID, email)
+
+	input := domain.CreateInviteInput{
+		WorkspaceID:   workspaceID,
+		Email:         email,
+		Role:          domain.RoleMember, // Default to member for resend? Or should we store role?
+		SendEmail:     true,
+		InviteBaseURL: baseURL,
+	}
+
+	// Try to find if there was a specific role before?
+	invites, _ := s.repo.ListInvites(ctx, workspaceID)
+	for _, inv := range invites {
+		if inv.Email == email {
+			input.Role = inv.Role
+			break
+		}
+	}
+
+	return s.InviteUser(ctx, input)
+}
+
+func (s *workspaceService) RevokeInvite(ctx context.Context, workspaceID uuid.UUID, email string) error {
+	return s.repo.DeleteInviteByEmail(ctx, workspaceID, email)
 }
 
 func generateRandomToken(length int) (string, error) {

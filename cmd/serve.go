@@ -10,6 +10,7 @@ import (
 	"github.com/resoul/studio.go.api/internal/config"
 	"github.com/resoul/studio.go.api/internal/di"
 	"github.com/resoul/studio.go.api/internal/infrastructure/db"
+	"github.com/resoul/studio.go.api/internal/infrastructure/ory"
 	"github.com/resoul/studio.go.api/internal/service"
 	"github.com/resoul/studio.go.api/internal/transport/http/handlers"
 	"github.com/resoul/studio.go.api/internal/transport/http/router"
@@ -39,14 +40,15 @@ func serve(cmd *cobra.Command) {
 	// Repositories
 	profileRepo := db.NewProfileRepository(container.DB)
 	workspaceRepo := db.NewWorkspaceRepository(container.DB)
+	userRepo := ory.NewKratosRepository(cfg)
 
 	// Services
 	profileSvc := service.NewProfileService(profileRepo, container.Storage)
-	workspaceSvc := service.NewWorkspaceService(workspaceRepo, container.Storage, container.RabbitMQ)
+	workspaceSvc := service.NewWorkspaceService(workspaceRepo, profileRepo, userRepo, container.Storage, container.RabbitMQ)
 
 	// Handlers
 	profileHandler := handlers.NewProfileHandler(profileSvc, workspaceSvc)
-	workspaceHandler := handlers.NewWorkspaceHandler(workspaceSvc)
+	workspaceHandler := handlers.NewWorkspaceHandler(workspaceSvc, cfg)
 
 	// Start invite worker (async email delivery via RabbitMQ)
 	if container.RabbitMQ != nil {

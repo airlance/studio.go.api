@@ -70,10 +70,15 @@ type WorkspaceRepository interface {
 	GetInvite(ctx context.Context, token string) (*WorkspaceInvite, error)
 	DeleteInvite(ctx context.Context, token string) error
 	Update(ctx context.Context, ws *Workspace) error
+	ListInvites(ctx context.Context, workspaceID uuid.UUID) ([]WorkspaceInvite, error)
 
 	SetCurrentWorkspace(ctx context.Context, config *UserWorkspaceConfig) error
 	GetCurrentWorkspace(ctx context.Context, userID string) (*UserWorkspaceConfig, error)
 	UpdateConfig(ctx context.Context, config *UserWorkspaceConfig) error
+
+	ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]WorkspaceMember, error)
+	DeleteMember(ctx context.Context, workspaceID uuid.UUID, userID string) error
+	DeleteInviteByEmail(ctx context.Context, workspaceID uuid.UUID, email string) error
 }
 
 type CreateWorkspaceInput struct {
@@ -109,6 +114,7 @@ type WorkspaceService interface {
 	ListForUser(ctx context.Context, userID string) ([]Workspace, error)
 
 	InviteUser(ctx context.Context, input CreateInviteInput) (*WorkspaceInvite, error)
+	ListInvites(ctx context.Context, workspaceID uuid.UUID) ([]WorkspaceInvite, error)
 	PreviewInvite(ctx context.Context, token string) (*Workspace, int64, error)
 	AcceptInvite(ctx context.Context, token string, userID string) error
 
@@ -117,6 +123,19 @@ type WorkspaceService interface {
 	UpdateWorkspace(ctx context.Context, id uuid.UUID, input UpdateWorkspaceInput) (*Workspace, error)
 	UpdateConfig(ctx context.Context, userID string, workspaceID uuid.UUID, language, theme string) error
 	GetCurrentConfig(ctx context.Context, userID string) (*UserWorkspaceConfig, error)
+
+	ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]MemberInfo, error)
+	RemoveMember(ctx context.Context, workspaceID uuid.UUID, userID string) error
+	ResendInvite(ctx context.Context, workspaceID uuid.UUID, email string, baseURL string) (*WorkspaceInvite, error)
+	RevokeInvite(ctx context.Context, workspaceID uuid.UUID, email string) error
+}
+
+type MemberInfo struct {
+	WorkspaceMember
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	AvatarURL string `json:"avatar_url"`
 }
 
 type Storage interface {

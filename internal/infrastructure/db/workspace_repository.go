@@ -110,3 +110,23 @@ func (r *workspaceRepository) UpdateConfig(ctx context.Context, config *domain.U
 func (r *workspaceRepository) Update(ctx context.Context, ws *domain.Workspace) error {
 	return r.db.WithContext(ctx).Save(ws).Error
 }
+
+func (r *workspaceRepository) ListInvites(ctx context.Context, workspaceID uuid.UUID) ([]domain.WorkspaceInvite, error) {
+	var invites []domain.WorkspaceInvite
+	err := r.db.WithContext(ctx).Where("workspace_id = ?", workspaceID).Order("created_at DESC").Find(&invites).Error
+	return invites, err
+}
+
+func (r *workspaceRepository) ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]domain.WorkspaceMember, error) {
+	var members []domain.WorkspaceMember
+	err := r.db.WithContext(ctx).Where("workspace_id = ?", workspaceID).Order("joined_at ASC").Find(&members).Error
+	return members, err
+}
+
+func (r *workspaceRepository) DeleteMember(ctx context.Context, workspaceID uuid.UUID, userID string) error {
+	return r.db.WithContext(ctx).Delete(&domain.WorkspaceMember{}, "workspace_id = ? AND user_id = ?", workspaceID, userID).Error
+}
+
+func (r *workspaceRepository) DeleteInviteByEmail(ctx context.Context, workspaceID uuid.UUID, email string) error {
+	return r.db.WithContext(ctx).Delete(&domain.WorkspaceInvite{}, "workspace_id = ? AND email = ?", workspaceID, email).Error
+}

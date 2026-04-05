@@ -32,7 +32,13 @@ func New(cfg *config.Config, profileHandler *handlers.ProfileHandler, workspaceH
 				workspaces.POST("", workspaceHandler.Create)
 				workspaces.POST("/invites/:token/accept", workspaceHandler.AcceptInvite)
 				workspaces.POST("/:id/invites", workspaceHandler.CreateInvite)
+				workspaces.GET("/:id/invites", workspaceHandler.ListInvites)
+				workspaces.POST("/:id/invites/resend", workspaceHandler.ResendInvite)
+				workspaces.DELETE("/:id/invites/:email", workspaceHandler.RevokeInvite)
 				workspaces.PATCH("/:id", workspaceHandler.Update)
+
+				workspaces.GET("/:id/members", workspaceHandler.ListMembers)
+				workspaces.DELETE("/:id/members/:user_id", workspaceHandler.RemoveMember)
 
 				workspaces.GET("/current", workspaceHandler.GetCurrent)
 				workspaces.POST("/current/:id", workspaceHandler.SetCurrent)

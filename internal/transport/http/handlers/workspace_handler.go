@@ -1,22 +1,26 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	ory "github.com/ory/client-go"
+	"github.com/resoul/studio.go.api/internal/config"
 	"github.com/resoul/studio.go.api/internal/domain"
 	"github.com/resoul/studio.go.api/internal/transport/http/utils"
 )
 
 type WorkspaceHandler struct {
 	service domain.WorkspaceService
+	cfg     *config.Config
 }
 
-func NewWorkspaceHandler(service domain.WorkspaceService) *WorkspaceHandler {
-	return &WorkspaceHandler{service: service}
+func NewWorkspaceHandler(service domain.WorkspaceService, cfg *config.Config) *WorkspaceHandler {
+	return &WorkspaceHandler{
+		service: service,
+		cfg:     cfg,
+	}
 }
 
 func (h *WorkspaceHandler) Create(c *gin.Context) {
@@ -144,10 +148,8 @@ func (h *WorkspaceHandler) CreateInvite(c *gin.Context) {
 		return
 	}
 
-	// Build the base URL for the invite link from the incoming request so it
-	// works correctly across environments (local, staging, production) without
-	// needing an extra env var.
-	inviteBaseURL := fmt.Sprintf("%s://%s", scheme(c), c.Request.Host)
+	// Build the base URL for the invite link from the configuration.
+	inviteBaseURL := h.cfg.Server.DashboardURL
 
 	input := domain.CreateInviteInput{
 		WorkspaceID:   wsID,
@@ -162,8 +164,105 @@ func (h *WorkspaceHandler) CreateInvite(c *gin.Context) {
 		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
+	utils.RespondOK(c, invite)
+}
+
+func (h *WorkspaceHandler) ListInvites(c *gin.Context) {
+	wsID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusUnprocessableEntity, "INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	invites, err := h.service.ListInvites(c.Request.Context(), wsID)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	utils.RespondOK(c, invites)
+}
+
+func (h *WorkspaceHandler) ListMembers(c *gin.Context) {
+	wsID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	members, err := h.service.ListMembers(c.Request.Context(), wsID)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	utils.RespondOK(c, members)
+}
+
+func (h *WorkspaceHandler) RemoveMember(c *gin.Context) {
+	wsID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	userID := c.Param("user_id")
+	if userID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", "User ID is required")
+		return
+	}
+
+	if err := h.service.RemoveMember(c.Request.Context(), wsID, userID); err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *WorkspaceHandler) ResendInvite(c *gin.Context) {
+	wsID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	invite, err := h.service.ResendInvite(c.Request.Context(), wsID, req.Email, h.cfg.Server.DashboardURL)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
 
 	utils.RespondOK(c, invite)
+}
+
+func (h *WorkspaceHandler) RevokeInvite(c *gin.Context) {
+	wsID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", "Invalid workspace id")
+		return
+	}
+
+	email := c.Param("email")
+	if email == "" {
+		utils.RespondError(c, http.StatusBadRequest, "INVALID_INPUT", "Email is required")
+		return
+	}
+
+	if err := h.service.RevokeInvite(c.Request.Context(), wsID, email); err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func (h *WorkspaceHandler) GetCurrent(c *gin.Context) {
