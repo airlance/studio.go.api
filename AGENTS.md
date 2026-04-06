@@ -19,6 +19,7 @@ external tools like Ory, Gin, or GORM.
 │   │   ├── errors.go       # Sentinel errors (ErrNotFound, ErrConflict, …)
 │   │   ├── events.go       # Message contracts (InviteEvent) — single source of truth
 │   │   ├── mailer.go       # Mailer port (MailMessage, Mailer interface)
+│   │   ├── presence.go     # PresenceHub port, PresenceClient port, PresenceEvent contracts
 │   │   ├── profile.go
 │   │   ├── user.go
 │   │   ├── workspace.go
@@ -41,8 +42,10 @@ external tools like Ory, Gin, or GORM.
 │   │   │   └── kratos.go
 │   │   ├── rabbitmq/
 │   │   │   └── client.go
-│   │   └── storage/
-│   │       └── minio.go
+│   │   ├── storage/
+│   │   │   └── minio.go
+│   │   └── ws/
+│   │       └── hub.go      # PresenceHub implementation (gorilla/websocket)
 │   ├── di/
 │   │   └── container.go    # Composition root — holds all singletons
 │   ├── config/
@@ -91,10 +94,11 @@ The "language" of the project. **No external dependencies allowed here.**
 | `errors.go` | Sentinel errors: `ErrNotFound`, `ErrConflict`, `ErrForbidden`, `ErrUnauthorized`, `ErrInvalidInput`, `ErrInviteExpired`, `ErrOwnerCannotBeRemoved` |
 | `events.go` | `InviteEvent` — the message contract between service and worker |
 | `mailer.go` | `MailMessage`, `Mailer` interface |
+| `presence.go` | `PresenceHub` port, `PresenceClient` port, `PresenceEvent`, `PresenceSyncEvent`, `WebsocketEvent`, `WebsocketEventType` constants |
 | `profile.go` | `Profile` entity, `ProfileRepository`, `ProfileService`, `UpdateProfileInput` |
 | `user.go` | `User` entity, `UserRepository` |
 | `workspace.go` | `Workspace`, `WorkspaceMember`, `WorkspaceInvite`, `UserWorkspaceConfig`, repository/service interfaces, all input structs, `Storage` port |
-| `chat.go` | `Channel`, `DirectMessageConversation`, `Message`, repository/service interfaces |
+| `chat.go` | `Channel`, `DirectMessageConversation`, `Message`, `ChannelMember`, repository/service interfaces |
 
 **Hard rules:**
 - **PROHIBITED:** `map[string]interface{}` or `map[string]any` for entities or API payloads. Use named structs.
@@ -109,12 +113,21 @@ Business logic. Coordinates domain entities and repository/port interfaces.
 - Returns `domain` sentinel errors (e.g. `domain.ErrNotFound`) — never raw strings that embed
   status codes.
 - May depend on `*rabbitmq.Client` for event publishing (messaging bus, not a data store).
+- May depend on `domain.PresenceHub` for broadcasting real-time events after a write operation.
 - Must NOT import from `worker/` or `transport/`.
 
 #### WorkspaceService
 - `InviteUser` — persists the invite, publishes a `domain.InviteEvent` to `workspace.invites`.
 - `RemoveMember` — returns `domain.ErrOwnerCannotBeRemoved` when target is the workspace owner.
 - If `*rabbitmq.Client` is `nil`, invite is saved but no event is published (graceful degradation).
+
+#### ChatService
+- `SendMessage` — persists the message, then calls `hub.Broadcast(ctx, msg)` to push it in
+  real-time to all connected WebSocket clients.
+- `ListChannels` — if no channels exist for the workspace, auto-creates a `#general` channel.
+  **Note:** the auto-creation uses `creatorID = "system"` which must be handled gracefully
+  downstream (e.g. members list should tolerate a non-existent profile ID).
+- `GetOrCreateConversation` — idempotent; returns existing DM conversation or creates one.
 
 ### D. Worker Layer (`internal/worker/`)
 
@@ -149,7 +162,7 @@ Split by resource to keep files small and focused:
 | `workspace_handler.go` | Workspace CRUD, current workspace, config |
 | `invite_handler.go` | Preview, accept, create, list, resend, revoke invites |
 | `member_handler.go` | List members, remove member |
-| `ws_handler.go` | Real-time WebSocket connection (/ws) |
+| `ws_handler.go` | Real-time WebSocket connection (`GET /ws`) |
 | `chat_handler.go` | Channels, DMs, message history |
 
 **Handler contract:**
@@ -158,6 +171,12 @@ Split by resource to keep files small and focused:
 3. Call the service method.
 4. On error → `utils.RespondMapped(c, err)` — never hand-code status codes for domain errors.
 5. On success → `utils.RespondOK` / `utils.RespondCreated` / `c.Status(204)`.
+
+**WebSocket client (`ws_handler.go`):**
+- `ws_handler.go` defines its own local `Client` struct (conn + send channel) that implements
+  `domain.PresenceClient`. This struct must stay in sync with the interface contract.
+  **Do not add a second implementation** — if you need to share the struct, move it to a shared
+  package rather than duplicating.
 
 #### Error Mapping (`utils/errors.go`)
 
@@ -189,10 +208,13 @@ Use `utils.RespondMapped(c, err)` in handlers — never duplicate this table in 
 ### F. Infrastructure Layer (`internal/infrastructure/`)
 
 #### Database (`db/`)
-- Implements `ProfileRepository` and `WorkspaceRepository` via GORM.
+- Implements `ProfileRepository`, `WorkspaceRepository`, and `ChatRepository` via GORM.
 - **FORBIDDEN:** `db.AutoMigrate()` inside application startup.
 - All schema changes live in `db/migrations/` as explicit `gormigrate` entries.
 - Migrations run only via `api migrate up` / `api migrate down`.
+- `ListMessages` queries by `channel_id OR conversation_id` — prefer calling it with a UUID that
+  belongs to only one target type. Consider splitting into `ListChannelMessages` /
+  `ListConversationMessages` if ambiguity becomes a problem.
 
 #### Mailer (`mailer/smtp.go`)
 - One SMTP adapter, one constructor: `New(*config.MailerConfig) (domain.Mailer, error)`.
@@ -218,6 +240,17 @@ Use `utils.RespondMapped(c, err)` in handlers — never duplicate this table in 
 - Exposes `Publish`, `DeclareQueue`, `Consume` behind a mutex-protected channel.
 - `Consume` is used exclusively by workers — handlers and services only call `Publish`.
 
+#### WebSocket Hub (`ws/hub.go`)
+- Implements `domain.PresenceHub`.
+- Maintains a `map[userID][]PresenceClient` — one user can have multiple connections (multiple tabs).
+- Runs an event loop via `Hub.Run(ctx)` started in `cmd/serve.go`.
+- On first connection for a user: broadcasts `PresenceEventJoin` to all clients.
+- On last disconnection for a user: broadcasts `PresenceEventLeave` to all clients.
+- On new connection: sends a `PresenceSyncEvent` (full online user list) to the new client only.
+- `Broadcast` wraps any payload in `WebsocketEvent{Type, Payload}` unless already wrapped.
+  Chat messages (`*domain.Message`) are wrapped with `WebsocketEventChatMessage`; everything else
+  gets `WebsocketEventPresence`.
+
 ---
 
 ## 3. Dependency Injection (`di/Container`)
@@ -230,11 +263,13 @@ Use `utils.RespondMapped(c, err)` in handlers — never duplicate this table in 
 | `DB` | `*gorm.DB` | `postgres.Open(cfg.DB.DSN)` |
 | `Storage` | `domain.Storage` | `storage.NewMinioStorage(cfg)` |
 | `Mailer` | `domain.Mailer` | `mailer.New(&cfg.Mailer)` |
+| `Presence` | `domain.PresenceHub` | `ws.NewHub()` |
 | `RabbitMQ` | `*rabbitmq.Client` | optional, degrades gracefully |
 
 Services receive only the dependencies they need — **never the full container**.
 
 - `WorkspaceService` receives `*rabbitmq.Client` (publish) and **not** `domain.Mailer`.
+- `ChatService` receives `domain.ChatRepository` and `domain.PresenceHub` (broadcast on send).
 - `InviteWorker` receives `*rabbitmq.Client` (consume), `domain.WorkspaceRepository`, `domain.Mailer`.
 
 ---
@@ -256,8 +291,30 @@ type InviteEvent struct {
 }
 ```
 
-> When adding a new async event, create its contract struct in `domain/events.go` first,
-> then reference it from both the publishing service and the consuming worker.
+WebSocket event contracts live in `domain/presence.go`:
+
+```go
+// Envelope sent over every WebSocket connection.
+type WebsocketEvent struct {
+    Type    WebsocketEventType `json:"type"`    // "PRESENCE" | "CHAT_MESSAGE"
+    Payload interface{}        `json:"payload"`
+}
+
+// Payload for PRESENCE events.
+type PresenceEvent struct {
+    Type   PresenceEventType `json:"type"`    // "JOIN" | "LEAVE"
+    UserID string            `json:"user_id"`
+}
+
+// Payload for initial SYNC sent to a newly connected client.
+type PresenceSyncEvent struct {
+    Type    PresenceEventType `json:"type"`     // "SYNC"
+    UserIDs []string          `json:"user_ids"`
+}
+```
+
+> When adding a new async event, create its contract struct in `domain/events.go` (queue-based)
+> or `domain/presence.go` (WebSocket-based) first, then reference it from both producer and consumer.
 
 ---
 
@@ -279,7 +336,33 @@ InviteWorker (goroutine)
 
 ---
 
-## 6. Communication Patterns
+## 6. Real-Time Chat Flow (WebSocket)
+
+```
+Client connects
+  GET /ws  (auth middleware injects *ory.Identity)
+  → ws_handler.HandleWS
+      → hub.Register(userID, client)         (triggers PresenceEventJoin broadcast)
+      → go writePump(client)                 (drains client.send channel → conn.WriteJSON)
+      → go readPump(userID, client)          (keeps conn alive; on close → hub.Unregister)
+
+Client sends a message
+  POST /workspaces/:id/chat/messages/:chat_id
+  → chat_handler.SendMessage
+      → ChatService.SendMessage
+          → repo.SaveMessage                 (persist to DB)
+          → hub.Broadcast(ctx, *Message)     (Hub wraps in WebsocketEvent{CHAT_MESSAGE})
+              → for each online client → client.Send(event) → writePump → conn.WriteJSON
+
+Client disconnects
+  readPump exits
+  → hub.Unregister(userID, client)
+      → if last connection for user → PresenceEventLeave broadcast
+```
+
+---
+
+## 7. Communication Patterns
 
 1. **Strong Typing Everywhere** — all inter-layer data uses domain structs. No `map[string]any`.
 2. **Dependency Injection** — all dependencies passed via `New…` constructors.
@@ -290,28 +373,45 @@ InviteWorker (goroutine)
    Workers start only when `container.RabbitMQ != nil`.
 6. **Async Side Effects** — operations touching external systems (email, future webhooks) are
    published to a queue and handled by workers — never blocking the HTTP response.
+7. **Real-Time Side Effects** — after any write that clients need to see instantly (e.g. new
+   message), the service calls `hub.Broadcast`. The Hub is an in-process bus; it does not replace
+   the DB as the source of truth.
 
 ---
 
-## 7. Adding a New Resource (Checklist)
+## 8. Known Issues / Technical Debt
+
+| Location | Issue | Recommendation |
+|----------|-------|----------------|
+| `db/chat_repository.go` `ListMessages` | Queries `channel_id OR conversation_id` — ambiguous if UUIDs collide | Split into `ListChannelMessages` / `ListConversationMessages` |
+| `service/chat_service.go` `ListChannels` | `repo.ListChannels(ctx, wsID, "")` with empty userID is an undocumented side-channel contract | Document in `ChatRepository` interface or add a dedicated `ListPublicChannels` method |
+| `service/chat_service.go` `ListChannels` | Auto-creates `#general` with `creatorID = "system"` — a non-existent profile ID | Use a const sentinel or skip member insertion for system channels |
+| `transport/http/handlers/ws_handler.go` | Duplicates the `Client` struct from `infrastructure/ws/hub.go` | Move `Client` to a shared package, or keep only one implementation |
+| `service/workspace_service.go` `ResendInvite` | Deletes the invite before reading its role; role lookup then scans a list that no longer contains the deleted record | Read the old invite first, capture role, then delete and re-create |
+
+---
+
+## 9. Adding a New Resource (Checklist)
 
 When introducing a new domain object (e.g. `Project`, `Asset`):
 
 - [ ] Add entity + repository interface + service interface to `internal/domain/<resource>.go`
 - [ ] Add sentinel errors to `domain/errors.go` if new failure modes are needed
-- [ ] Add message contracts to `domain/events.go` if async events are needed
+- [ ] Add message contracts to `domain/events.go` if async (queue) events are needed
+- [ ] Add WebSocket event contracts to `domain/presence.go` if real-time push is needed
 - [ ] Implement repository in `internal/infrastructure/db/<resource>_repository.go`
 - [ ] Add migration in `internal/infrastructure/db/migrations/`
 - [ ] Implement service in `internal/service/<resource>_service.go`
 - [ ] Add handler file(s) in `internal/transport/http/handlers/<resource>_handler.go`
 - [ ] Register routes in `internal/transport/http/router/router.go`
-- [ ] For Real-time: Start Hub's `Run` loop in `cmd/serve.go`
+- [ ] For Real-time: inject `domain.PresenceHub` into the service; call `hub.Broadcast` after writes
+- [ ] For Real-time: start Hub's `Run` loop in `cmd/serve.go` (already running — no duplicate needed)
 - [ ] Wire in `cmd/serve.go`
 - [ ] Extend `utils/errors.go` mapper if new sentinel errors were added
 
 ---
 
-## 8. Configuration Reference
+## 10. Configuration Reference
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -327,7 +427,7 @@ When introducing a new domain object (e.g. `Project`, `Asset`):
 
 ---
 
-## 9. Technology Stack
+## 11. Technology Stack
 
 | Concern | Tool |
 |---------|------|
@@ -340,3 +440,4 @@ When introducing a new domain object (e.g. `Project`, `Asset`):
 | Storage | MinIO (S3-compatible) |
 | Mailer | SMTP (`net/smtp` + `crypto/tls`) |
 | Message Queue | RabbitMQ via [amqp091-go](https://github.com/rabbitmq/amqp091-go) |
+| WebSocket | [gorilla/websocket](https://github.com/gorilla/websocket) |
