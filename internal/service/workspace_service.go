@@ -234,6 +234,24 @@ func (s *workspaceService) AcceptInvite(ctx context.Context, token string, userI
 		return domain.ErrInviteExpired
 	}
 
+	// Check if already a member to make this idempotent
+	_, err = s.repo.GetMember(ctx, invite.WorkspaceID, userID)
+	if err == nil {
+		// User is already a member, just cleanup the invite and return success
+		return s.repo.DeleteInvite(ctx, token)
+	}
+
+	// Ensure profile exists for the joining user so they appear in members list
+	if _, err := s.profileRepo.FindByID(ctx, userID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			_ = s.profileRepo.Create(ctx, &domain.Profile{
+				ID:        userID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			})
+		}
+	}
+
 	member := &domain.WorkspaceMember{
 		WorkspaceID: invite.WorkspaceID,
 		UserID:      userID,

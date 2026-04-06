@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	ory "github.com/ory/client-go"
 	"github.com/resoul/studio.go.api/internal/domain"
 	"github.com/resoul/studio.go.api/internal/transport/http/utils"
 )
@@ -54,7 +55,7 @@ func (h *WorkspaceHandler) AcceptInvite(c *gin.Context) {
 		return
 	}
 
-	oryIdentity, ok := identity.(interface{ GetId() string })
+	oryIdentity, ok := identity.(*ory.Identity)
 	if !ok {
 		utils.RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Invalid identity type")
 		return
@@ -66,7 +67,7 @@ func (h *WorkspaceHandler) AcceptInvite(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AcceptInvite(c.Request.Context(), token, oryIdentity.GetId()); err != nil {
+	if err := h.service.AcceptInvite(c.Request.Context(), token, oryIdentity.Id); err != nil {
 		utils.RespondMapped(c, err)
 		return
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/resoul/studio.go.api/internal/di"
 	"github.com/resoul/studio.go.api/internal/infrastructure/db"
 	"github.com/resoul/studio.go.api/internal/infrastructure/ory"
+	"github.com/resoul/studio.go.api/internal/infrastructure/ws"
 	"github.com/resoul/studio.go.api/internal/service"
 	"github.com/resoul/studio.go.api/internal/transport/http/handlers"
 	"github.com/resoul/studio.go.api/internal/transport/http/router"
@@ -41,14 +42,18 @@ func serve(cmd *cobra.Command) {
 	profileRepo := db.NewProfileRepository(container.DB)
 	workspaceRepo := db.NewWorkspaceRepository(container.DB)
 	userRepo := ory.NewKratosRepository(cfg)
+	chatRepo := db.NewChatRepository(container.DB)
 
 	// Services
 	profileSvc := service.NewProfileService(profileRepo, container.Storage)
 	workspaceSvc := service.NewWorkspaceService(workspaceRepo, profileRepo, userRepo, container.Storage, container.RabbitMQ)
+	chatSvc := service.NewChatService(chatRepo, container.Presence)
 
 	// Handlers
 	profileHandler := handlers.NewProfileHandler(profileSvc, workspaceSvc)
 	workspaceHandler := handlers.NewWorkspaceHandler(workspaceSvc, cfg)
+	wsHandler := handlers.NewWSHandler(container.Presence)
+	chatHandler := handlers.NewChatHandler(chatSvc)
 
 	// Start invite worker (async email delivery via RabbitMQ)
 	if container.RabbitMQ != nil {
@@ -56,8 +61,13 @@ func serve(cmd *cobra.Command) {
 		go inviteWorker.Start(ctx)
 	}
 
+	// Start Presence Hub Run loop
+	if h, ok := container.Presence.(*ws.Hub); ok {
+		go h.Run(ctx)
+	}
+
 	// Router
-	r := router.New(cfg, profileHandler, workspaceHandler)
+	r := router.New(cfg, profileHandler, workspaceHandler, wsHandler, chatHandler)
 
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)
 	server := &http.Server{

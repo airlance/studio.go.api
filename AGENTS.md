@@ -21,17 +21,20 @@ external tools like Ory, Gin, or GORM.
 │   │   ├── mailer.go       # Mailer port (MailMessage, Mailer interface)
 │   │   ├── profile.go
 │   │   ├── user.go
-│   │   └── workspace.go
+│   │   ├── workspace.go
+│   │   └── chat.go
 │   ├── service/            # Business Logic (Use Cases)
 │   │   ├── profile_service.go
-│   │   └── workspace_service.go
+│   │   ├── workspace_service.go
+│   │   └── chat_service.go
 │   ├── worker/             # Async background consumers (RabbitMQ)
 │   │   └── invite_worker.go
 │   ├── infrastructure/     # External adapters
 │   │   ├── db/
 │   │   │   ├── migrations/
 │   │   │   ├── profile_repository.go
-│   │   │   └── workspace_repository.go
+│   │   │   ├── workspace_repository.go
+│   │   │   └── chat_repository.go
 │   │   ├── mailer/
 │   │   │   └── smtp.go
 │   │   ├── ory/
@@ -52,7 +55,9 @@ external tools like Ory, Gin, or GORM.
 │           │   ├── profile_handler.go
 │           │   ├── workspace_handler.go  # Workspace CRUD + config
 │           │   ├── invite_handler.go     # Invite lifecycle
-│           │   └── member_handler.go     # Member management
+│           │   ├── member_handler.go     # Member management
+│           │   ├── ws_handler.go         # Real-time WebSocket Hub
+│           │   └── chat_handler.go       # Chat CRUD & messaging
 │           ├── middleware/
 │           │   └── auth.go
 │           └── utils/
@@ -89,6 +94,7 @@ The "language" of the project. **No external dependencies allowed here.**
 | `profile.go` | `Profile` entity, `ProfileRepository`, `ProfileService`, `UpdateProfileInput` |
 | `user.go` | `User` entity, `UserRepository` |
 | `workspace.go` | `Workspace`, `WorkspaceMember`, `WorkspaceInvite`, `UserWorkspaceConfig`, repository/service interfaces, all input structs, `Storage` port |
+| `chat.go` | `Channel`, `DirectMessageConversation`, `Message`, repository/service interfaces |
 
 **Hard rules:**
 - **PROHIBITED:** `map[string]interface{}` or `map[string]any` for entities or API payloads. Use named structs.
@@ -143,6 +149,8 @@ Split by resource to keep files small and focused:
 | `workspace_handler.go` | Workspace CRUD, current workspace, config |
 | `invite_handler.go` | Preview, accept, create, list, resend, revoke invites |
 | `member_handler.go` | List members, remove member |
+| `ws_handler.go` | Real-time WebSocket connection (/ws) |
+| `chat_handler.go` | Channels, DMs, message history |
 
 **Handler contract:**
 1. Extract identity from context.
@@ -297,6 +305,7 @@ When introducing a new domain object (e.g. `Project`, `Asset`):
 - [ ] Implement service in `internal/service/<resource>_service.go`
 - [ ] Add handler file(s) in `internal/transport/http/handlers/<resource>_handler.go`
 - [ ] Register routes in `internal/transport/http/router/router.go`
+- [ ] For Real-time: Start Hub's `Run` loop in `cmd/serve.go`
 - [ ] Wire in `cmd/serve.go`
 - [ ] Extend `utils/errors.go` mapper if new sentinel errors were added
 

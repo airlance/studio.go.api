@@ -8,7 +8,7 @@ import (
 	"github.com/resoul/studio.go.api/internal/transport/http/utils"
 )
 
-func New(cfg *config.Config, profileHandler *handlers.ProfileHandler, workspaceHandler *handlers.WorkspaceHandler) *gin.Engine {
+func New(cfg *config.Config, profileHandler *handlers.ProfileHandler, workspaceHandler *handlers.WorkspaceHandler, wsHandler *handlers.WSHandler, chatHandler *handlers.ChatHandler) *gin.Engine {
 	r := gin.Default()
 	r.Use(utils.CORSMiddleware(cfg.Server.GetCORSAllowedOrigins()))
 
@@ -25,6 +25,7 @@ func New(cfg *config.Config, profileHandler *handlers.ProfileHandler, workspaceH
 		{
 			protected.GET("/user/me", profileHandler.GetMe)
 			protected.PATCH("/user/profile", profileHandler.UpdateProfile)
+			protected.GET("/ws", wsHandler.HandleWS)
 
 			workspaces := protected.Group("/workspaces")
 			{
@@ -45,6 +46,16 @@ func New(cfg *config.Config, profileHandler *handlers.ProfileHandler, workspaceH
 
 				workspaces.GET("/config", workspaceHandler.GetConfig)
 				workspaces.PATCH("/config/:id", workspaceHandler.UpdateConfig)
+
+				chat := workspaces.Group("/:id/chat")
+				{
+					chat.GET("/channels", chatHandler.ListChannels)
+					chat.POST("/channels", chatHandler.CreateChannel)
+					chat.GET("/conversations", chatHandler.ListConversations)
+					chat.POST("/conversations", chatHandler.GetOrCreateConversation)
+					chat.GET("/messages/:chat_id", chatHandler.GetMessages) // changed from :id to :chat_id to avoid confusion with workspace :id
+					chat.POST("/messages/:chat_id", chatHandler.SendMessage)
+				}
 			}
 		}
 	}
